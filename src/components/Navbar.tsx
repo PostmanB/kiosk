@@ -4,11 +4,8 @@ import { FiMenu, FiX } from "react-icons/fi";
 import ThemeToggle from "./ui/ThemeToggle";
 
 const navLinks = [
-  { to: "/", label: "Overview" },
-  { to: "/palette", label: "Palette" },
-  { to: "/features", label: "Docs" },
-  { to: "/pricing", label: "Components" },
-  { to: "/contact", label: "Support" },
+  { to: "/cashier", label: "Cashier" },
+  { to: "/kitchen", label: "Kitchen" },
 ];
 
 const Navbar = () => {
@@ -38,7 +35,7 @@ const Navbar = () => {
             to="/"
             className="text-lg font-semibold text-brand transition-colors hover:text-brand/80"
           >
-            Starter Kit
+            Kiosk Control
           </Link>
           <div className="hidden items-center gap-6 sm:flex">
             {navLinks.map((link) => (
@@ -55,10 +52,10 @@ const Navbar = () => {
           <div className="flex items-center gap-3">
             <ThemeToggle />
             <Link
-              to="/pricing"
+              to="/cashier"
               className="hidden rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow transition-transform hover:-translate-y-0.5 hover:shadow-md sm:inline-flex"
             >
-              View Components
+              New Order
             </Link>
             <button
               type="button"
@@ -82,7 +79,7 @@ const Navbar = () => {
           <div className="relative ml-auto flex h-full w-72 max-w-full flex-col bg-primary shadow-2xl">
             <div className="flex items-center justify-between border-b border-accent-3/60 px-4 py-4">
               <span className="text-lg font-semibold text-brand">
-                Starter Kit
+                Kiosk Control
               </span>
               <button
                 type="button"
@@ -107,11 +104,11 @@ const Navbar = () => {
               ))}
               <ThemeToggle variant="menu" />
               <Link
-                to="/pricing"
+                to="/cashier"
                 className="mt-auto rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow transition-transform hover:-translate-y-0.5 hover:shadow-md"
                 onClick={() => setIsMenuOpen(false)}
               >
-                View Components
+                New Order
               </Link>
             </nav>
           </div>
