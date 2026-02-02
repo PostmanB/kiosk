@@ -6,7 +6,6 @@ import ThemeToggle from "./ui/ThemeToggle";
 const navLinks = [
   { to: "/cashier", label: "Cashier" },
   { to: "/kitchen", label: "Kitchen" },
-  { to: "/tables", label: "Tables" },
   { to: "/admin", label: "Admin" },
 ];
 
@@ -32,7 +31,7 @@ const Navbar = () => {
   return (
     <>
       <header className="border-b border-accent-3/50 bg-primary/80 backdrop-blur">
-        <nav className="mx-auto flex max-w-5xl items-center justify-between px-4 py-3 text-sm font-medium text-contrast/80">
+        <nav className="flex w-full items-center justify-between px-4 py-3 text-sm font-medium text-contrast/80">
           <Link
             to="/"
             className="text-lg font-semibold text-brand transition-colors hover:text-brand/80"

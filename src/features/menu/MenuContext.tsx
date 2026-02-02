@@ -21,6 +21,7 @@ export type MenuItem = {
   name: string;
   price: number;
   register_code: string | null;
+  icon_name: string | null;
   category_id: string;
   description: string | null;
   allow_sauces: boolean;
@@ -32,6 +33,7 @@ type AddItemInput = {
   name: string;
   price: number;
   register_code?: string;
+  icon_name?: string;
   category_id: string;
   description?: string;
   allow_sauces: boolean;
@@ -198,6 +200,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
         name: trimmedName,
         price: input.price,
         register_code: input.register_code?.trim() || null,
+        icon_name: input.icon_name?.trim() || null,
         category_id: input.category_id,
         description: input.description?.trim() || null,
         allow_sauces: input.allow_sauces,
@@ -299,6 +302,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
           name: trimmedName,
           price: input.price,
           register_code: input.register_code?.trim() || null,
+          icon_name: input.icon_name?.trim() || null,
           category_id: input.category_id,
           description: input.description?.trim() || null,
           allow_sauces: input.allow_sauces,

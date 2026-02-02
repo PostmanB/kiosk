@@ -1,5 +1,6 @@
 import { useMemo, useState } from "react";
 import { useOrders } from "../features/orders/OrdersContext";
+import { useSessions } from "../features/sessions/SessionsContext";
 
 const formatCurrency = (value: number) => `EUR ${value.toFixed(2)}`;
 
@@ -15,6 +16,7 @@ const formatModifierLines = (modifiers?: Record<string, string[]>) => {
 
 const Tables = () => {
   const { orders, isLoading, error } = useOrders();
+  const { sessions, closeSession } = useSessions();
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
 
   const tableLayout = useMemo(
@@ -35,33 +37,25 @@ const Tables = () => {
   const takeawayLabel = "Takeaway";
 
   const tableGroups = useMemo(() => {
-    const map = new Map<
-      string,
-      { table: string; items: typeof orders[number]["items"]; latest: string; ordersCount: number }
-    >();
-
-    orders
-      .filter((order) => order.status !== "served")
-      .forEach((order) => {
-        const existing = map.get(order.table);
-        if (existing) {
-          existing.items.push(...order.items);
-          existing.ordersCount += 1;
-          if (order.createdAt > existing.latest) {
-            existing.latest = order.createdAt;
-          }
-        } else {
-          map.set(order.table, {
-            table: order.table,
-            items: [...order.items],
-            latest: order.createdAt,
-            ordersCount: 1,
-          });
-        }
-      });
-
-    return Array.from(map.values()).sort((a, b) => a.table.localeCompare(b.table));
-  }, [orders]);
+    const openSessions = sessions.filter((session) => session.status === "open");
+    return openSessions
+      .map((session) => {
+        const sessionOrders = orders.filter(
+          (order) =>
+            order.sessionId === session.id ||
+            (order.sessionId == null && order.table === session.table)
+        );
+        const items = sessionOrders.flatMap((order) => order.items);
+        return {
+          table: session.table,
+          sessionId: session.id,
+          items,
+          ordersCount: sessionOrders.length,
+          latest: session.openedAt,
+        };
+      })
+      .sort((a, b) => a.table.localeCompare(b.table));
+  }, [orders, sessions]);
 
   const tableMap = useMemo(() => {
     const map = new Map<string, (typeof tableGroups)[number]>();
@@ -202,13 +196,26 @@ const Tables = () => {
                   {selectedGroup.ordersCount === 1 ? "" : "s"}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedTable(null)}
-                className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
-              >
-                Close
-              </button>
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    if (!selectedGroup?.sessionId) return;
+                    await closeSession(selectedGroup.sessionId);
+                    setSelectedTable(null);
+                  }}
+                  className="rounded-full border border-amber-400/40 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300 hover:text-amber-50"
+                >
+                  Close bill
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setSelectedTable(null)}
+                  className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             <div className="mt-6 grid flex-1 min-h-0 gap-6 overflow-hidden lg:grid-cols-[1.2fr_0.8fr]">

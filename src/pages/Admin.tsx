@@ -1,13 +1,12 @@
 ﻿import { useEffect, useMemo, useState } from "react";
+import { Icon } from "@iconify/react";
 import { useMenu } from "../features/menu/MenuContext";
 import type { MenuItem } from "../features/menu/MenuContext";
-
 type ModalState =
   | { mode: "add"; type: "category" | "sauce" | "side" | "item" }
   | { mode: "edit-list"; type: "category" | "sauce" | "side" }
   | { mode: "edit-item"; id: string }
   | null;
-
 const Admin = () => {
   const {
     categories,
@@ -25,13 +24,13 @@ const Admin = () => {
     updateSide,
     updateItem,
   } = useMenu();
-
   const [modal, setModal] = useState<ModalState>(null);
   const [modalFeedback, setModalFeedback] = useState<string | null>(null);
   const [nameField, setNameField] = useState("");
   const [itemName, setItemName] = useState("");
   const [itemPrice, setItemPrice] = useState("");
   const [itemRegisterCode, setItemRegisterCode] = useState("");
+  const [itemIconName, setItemIconName] = useState("");
   const [itemCategoryId, setItemCategoryId] = useState("");
   const [itemDescription, setItemDescription] = useState("");
   const [itemAllowSauces, setItemAllowSauces] = useState(true);
@@ -42,18 +41,15 @@ const Admin = () => {
   const [sideEdits, setSideEdits] = useState<Record<string, string>>({});
   const [rowFeedback, setRowFeedback] = useState<Record<string, string | null>>({});
   const [newEntry, setNewEntry] = useState({ category: "", sauce: "", side: "" });
-
   const categoryMap = useMemo(
     () => new Map(categories.map((category) => [category.id, category.name])),
     [categories]
   );
-
   useEffect(() => {
     if (!itemCategoryId && categories.length > 0) {
       setItemCategoryId(categories[0].id);
     }
   }, [categories, itemCategoryId]);
-
   useEffect(() => {
     setCategoryEdits(
       categories.reduce<Record<string, string>>((acc, category) => {
@@ -62,7 +58,6 @@ const Admin = () => {
       }, {})
     );
   }, [categories]);
-
   useEffect(() => {
     setSauceEdits(
       sauces.reduce<Record<string, string>>((acc, sauce) => {
@@ -71,7 +66,6 @@ const Admin = () => {
       }, {})
     );
   }, [sauces]);
-
   useEffect(() => {
     setSideEdits(
       sides.reduce<Record<string, string>>((acc, side) => {
@@ -80,12 +74,10 @@ const Admin = () => {
       }, {})
     );
   }, [sides]);
-
   const closeModal = () => {
     setModal(null);
     setModalFeedback(null);
   };
-
   const openAddModal = (type: "category" | "sauce" | "side" | "item") => {
     setModal({ mode: "add", type });
     setModalFeedback(null);
@@ -93,17 +85,16 @@ const Admin = () => {
     setItemName("");
     setItemPrice("");
     setItemRegisterCode("");
+    setItemIconName("");
     setItemDescription("");
     setItemAllowSauces(true);
     setItemAllowSides(false);
     setItemShowInKitchen(true);
   };
-
   const openEditListModal = (type: "category" | "sauce" | "side") => {
     setModal({ mode: "edit-list", type });
     setModalFeedback(null);
   };
-
   const openEditItemModal = (id: string) => {
     const match = items.find((item) => item.id === id);
     setModal({ mode: "edit-item", id });
@@ -111,40 +102,37 @@ const Admin = () => {
     setItemName(match?.name ?? "");
     setItemPrice(match ? match.price.toFixed(2) : "");
     setItemRegisterCode(match?.register_code ?? "");
+    setItemIconName(match?.icon_name ?? "");
     setItemCategoryId(match?.category_id ?? categories[0]?.id ?? "");
     setItemDescription(match?.description ?? "");
     setItemAllowSauces(match?.allow_sauces ?? true);
     setItemAllowSides(match?.allow_sides ?? false);
     setItemShowInKitchen(match?.show_in_kitchen ?? true);
   };
-
   const handleSave = async () => {
     if (!modal) return;
-
     if (modal.mode === "add") {
       if (modal.type === "category") {
         const result = await addCategory(nameField);
         setModalFeedback(result.ok ? "Category added." : result.error ?? "Unable to add category.");
         if (result.ok) closeModal();
       }
-
       if (modal.type === "sauce") {
         const result = await addSauce(nameField);
         setModalFeedback(result.ok ? "Sauce added." : result.error ?? "Unable to add sauce.");
         if (result.ok) closeModal();
       }
-
       if (modal.type === "side") {
         const result = await addSide(nameField);
         setModalFeedback(result.ok ? "Side added." : result.error ?? "Unable to add side.");
         if (result.ok) closeModal();
       }
-
       if (modal.type === "item") {
         const result = await addItem({
           name: itemName,
           price: Number(itemPrice),
           register_code: itemRegisterCode,
+          icon_name: itemIconName,
           category_id: itemCategoryId,
           description: itemDescription,
           allow_sauces: itemAllowSauces,
@@ -155,13 +143,13 @@ const Admin = () => {
         if (result.ok) closeModal();
       }
     }
-
     if (modal.mode === "edit-item") {
       const result = await updateItem({
         id: modal.id,
         name: itemName,
         price: Number(itemPrice),
         register_code: itemRegisterCode,
+        icon_name: itemIconName,
         category_id: itemCategoryId,
         description: itemDescription,
         allow_sauces: itemAllowSauces,
@@ -172,7 +160,6 @@ const Admin = () => {
       if (result.ok) closeModal();
     }
   };
-
   const handleUpdateCategory = async (id: string) => {
     const result = await updateCategory(id, categoryEdits[id] ?? "");
     setRowFeedback((prev) => ({
@@ -180,7 +167,6 @@ const Admin = () => {
       [id]: result.ok ? "Saved." : result.error ?? "Unable to save.",
     }));
   };
-
   const handleUpdateSauce = async (id: string) => {
     const result = await updateSauce(id, sauceEdits[id] ?? "");
     setRowFeedback((prev) => ({
@@ -188,7 +174,6 @@ const Admin = () => {
       [id]: result.ok ? "Saved." : result.error ?? "Unable to save.",
     }));
   };
-
   const handleUpdateSide = async (id: string) => {
     const result = await updateSide(id, sideEdits[id] ?? "");
     setRowFeedback((prev) => ({
@@ -196,7 +181,6 @@ const Admin = () => {
       [id]: result.ok ? "Saved." : result.error ?? "Unable to save.",
     }));
   };
-
   const handleAddInline = async (type: "category" | "sauce" | "side") => {
     const value = newEntry[type].trim();
     if (!value) {
@@ -210,7 +194,6 @@ const Admin = () => {
       setNewEntry((prev) => ({ ...prev, [type]: "" }));
     }
   };
-
   const renderEditList = (
     type: "category" | "sauce" | "side",
     data: { id: string; name: string }[]
@@ -220,7 +203,6 @@ const Admin = () => {
       type === "category" ? setCategoryEdits : type === "sauce" ? setSauceEdits : setSideEdits;
     const saveHandler =
       type === "category" ? handleUpdateCategory : type === "sauce" ? handleUpdateSauce : handleUpdateSide;
-
     return (
       <div className="space-y-3">
         <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-accent-3/60 bg-primary/60 p-4 sm:flex-row sm:items-center">
@@ -279,7 +261,6 @@ const Admin = () => {
       </div>
     );
   };
-
   return (
     <section className="space-y-10">
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
@@ -299,13 +280,11 @@ const Admin = () => {
           {isLoading ? "Syncing menu..." : `${items.length} menu items`}
         </div>
       </header>
-
       {error ? (
         <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">
           {error}
         </div>
       ) : null}
-
       <div className="flex flex-wrap gap-3">
         <button
           type="button"
@@ -336,13 +315,12 @@ const Admin = () => {
           Edit sides
         </button>
       </div>
-
       <div className="rounded-3xl border border-accent-3/60 bg-accent-2/70 p-8">
         <h2 className="text-lg font-semibold text-contrast">Menu items</h2>
         {items.length === 0 ? (
           <p className="mt-3 text-sm text-contrast/60">No items yet.</p>
         ) : (
-          <div className="mt-4 grid gap-3 md:grid-cols-2 xl:grid-cols-3">
+          <div className="mt-4 grid gap-3 grid-cols-[repeat(auto-fit,minmax(240px,1fr))]">
             {items.map((item: MenuItem) => (
               <button
                 key={item.id}
@@ -351,11 +329,16 @@ const Admin = () => {
                 className="flex h-full flex-col gap-2 rounded-2xl border border-accent-3/60 bg-primary/70 p-4 text-left text-sm text-contrast transition hover:border-brand/50 hover:-translate-y-0.5"
               >
                 <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <p className="font-semibold">{item.name}</p>
-                    <p className="text-xs text-contrast/60">
-                      {categoryMap.get(item.category_id) ?? "Unassigned"}
-                    </p>
+                  <div className="flex items-start gap-3">
+                    <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-accent-3/60 bg-primary/60">
+                      <Icon icon={item.icon_name || "ph:fork-knife"} className="h-5 w-5 text-brand" />
+                    </div>
+                    <div>
+                      <p className="font-semibold">{item.name}</p>
+                      <p className="text-xs text-contrast/60">
+                        {categoryMap.get(item.category_id) ?? "Unassigned"}
+                      </p>
+                    </div>
                   </div>
                   <span className="text-xs font-semibold text-brand">{item.price.toFixed(2)}</span>
                 </div>
@@ -381,7 +364,6 @@ const Admin = () => {
           </div>
         )}
       </div>
-
       {modal ? (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary/70 backdrop-blur p-4">
           <button type="button" aria-label="Close" className="absolute inset-0" onClick={closeModal} />
@@ -410,7 +392,6 @@ const Admin = () => {
                 Close
               </button>
             </div>
-
             <div className="mt-6 space-y-4">
               {modal.mode === "edit-list" ? (
                 renderEditList(
@@ -440,6 +421,22 @@ const Admin = () => {
                       className="w-full rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast outline-none transition focus:border-brand/60"
                       placeholder="Register code"
                     />
+                    <div className="space-y-2">
+                      <div className="flex items-center gap-3 rounded-2xl border border-accent-3/60 bg-primary/70 px-3 py-2">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-accent-3/60 bg-primary/60">
+                          <Icon icon={itemIconName.trim() || "ph:fork-knife"} className="h-5 w-5 text-brand" />
+                        </div>
+                        <input
+                          value={itemIconName}
+                          onChange={(event) => setItemIconName(event.target.value)}
+                          className="flex-1 bg-transparent px-1 py-2 text-sm text-contrast outline-none"
+                          placeholder="ph:hamburger"
+                        />
+                      </div>
+                      <p className="text-[11px] text-contrast/60">
+                        Icon name (Phosphor, e.g. ph:hamburger).
+                      </p>
+                    </div>
                     <select
                       value={itemCategoryId}
                       onChange={(event) => setItemCategoryId(event.target.value)}
@@ -497,9 +494,7 @@ const Admin = () => {
                   placeholder="Name"
                 />
               )}
-
               {modalFeedback ? <p className="text-xs text-contrast/70">{modalFeedback}</p> : null}
-
               {modal.mode !== "edit-list" ? (
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
                   <button
@@ -525,5 +520,4 @@ const Admin = () => {
     </section>
   );
 };
-
 export default Admin;

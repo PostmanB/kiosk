@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
+import { Icon } from "@iconify/react";
 import { useOrders } from "../features/orders/OrdersContext";
 import { useMenu } from "../features/menu/MenuContext";
+import { useSessions } from "../features/sessions/SessionsContext";
 import type { MenuItem } from "../features/menu/MenuContext";
 
 type MenuModifierGroup = {
@@ -18,6 +20,7 @@ type CartItem = {
 };
 
 const formatCurrency = (value: number) => `EUR ${value.toFixed(2)}`;
+const fallbackIconName = "ph:fork-knife";
 
 const normalizeModifiers = (modifiers: Record<string, string[]>) => {
   const sortedEntries = Object.entries(modifiers)
@@ -28,6 +31,16 @@ const normalizeModifiers = (modifiers: Record<string, string[]>) => {
 
 const modifiersSignature = (modifiers: Record<string, string[]>) =>
   JSON.stringify(normalizeModifiers(modifiers));
+
+const formatModifierLines = (modifiers?: Record<string, string[]>) => {
+  if (!modifiers) return [];
+  return Object.entries(modifiers)
+    .map(([group, values]) => {
+      if (!values || values.length === 0) return null;
+      return `${group}: ${values.join(", ")}`;
+    })
+    .filter(Boolean) as string[];
+};
 
 const buildModifierGroups = (
   item: MenuItem | null,
@@ -61,6 +74,25 @@ type ReviewLine = {
   quantity: number;
 };
 
+const buildReviewLines = (items: { name: string; quantity: number; registerCode?: string | null }[]) => {
+  const map = new Map<string, ReviewLine>();
+  items.forEach((item) => {
+    const code = item.registerCode ?? null;
+    const key = `${item.name}__${code ?? "none"}`;
+    const existing = map.get(key);
+    if (existing) {
+      existing.quantity += item.quantity;
+    } else {
+      map.set(key, {
+        name: item.name,
+        registerCode: code,
+        quantity: item.quantity,
+      });
+    }
+  });
+  return Array.from(map.values());
+};
+
 const Cashier = () => {
   const { orders, addOrder, isLoading: ordersLoading, error: ordersError } = useOrders();
   const {
@@ -71,9 +103,12 @@ const Cashier = () => {
     isLoading: menuLoading,
     error: menuError,
   } = useMenu();
+  const { sessions, createSession, closeSession } = useSessions();
 
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [table, setTable] = useState("");
+  const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [billTable, setBillTable] = useState<string | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [selectedModifiers, setSelectedModifiers] = useState<Record<string, string[]>>({});
@@ -112,24 +147,89 @@ const Cashier = () => {
     [cartItems]
   );
 
+  const activeSessionOrders = useMemo(
+    () => orders.filter((order) => (activeSessionId ? order.sessionId === activeSessionId : false)),
+    [orders, activeSessionId]
+  );
+
+  const existingItems = useMemo(
+    () => activeSessionOrders.flatMap((order) => order.items),
+    [activeSessionOrders]
+  );
+
   const reviewLines = useMemo<ReviewLine[]>(() => {
-    const map = new Map<string, ReviewLine>();
-    cartItems.forEach((item) => {
-      const code = item.menuItem.register_code ?? null;
-      const key = `${item.menuItem.name}__${code ?? "none"}`;
-      const existing = map.get(key);
-      if (existing) {
-        existing.quantity += item.quantity;
-      } else {
-        map.set(key, {
-          name: item.menuItem.name,
-          registerCode: code,
-          quantity: item.quantity,
-        });
-      }
-    });
-    return Array.from(map.values());
-  }, [cartItems]);
+    const existing = existingItems.map((item) => ({
+      name: item.name,
+      quantity: item.quantity,
+      registerCode: item.registerCode ?? null,
+    }));
+    const newItems = cartItems.map((item) => ({
+      name: item.menuItem.name,
+      quantity: item.quantity,
+      registerCode: item.menuItem.register_code ?? null,
+    }));
+    return buildReviewLines([...existing, ...newItems]);
+  }, [cartItems, existingItems]);
+
+  const existingTotal = useMemo(
+    () => existingItems.reduce((sum, item) => sum + (item.price ?? 0) * item.quantity, 0),
+    [existingItems]
+  );
+  const combinedTotal = existingTotal + cartTotal;
+
+  const openSessions = useMemo(
+    () => sessions.filter((session) => session.status === "open"),
+    [sessions]
+  );
+
+  const tableGroups = useMemo(() => {
+    return openSessions
+      .map((session) => {
+        const sessionOrders = orders.filter((order) => order.sessionId === session.id);
+        const items = sessionOrders.flatMap((order) => order.items);
+        return {
+          table: session.table,
+          sessionId: session.id,
+          items,
+          ordersCount: sessionOrders.length,
+        };
+      })
+      .filter((group) => group.ordersCount > 0)
+      .sort((a, b) => a.table.localeCompare(b.table));
+  }, [orders, openSessions]);
+
+  const tableGroupMap = useMemo(() => {
+    const map = new Map<string, (typeof tableGroups)[number]>();
+    tableGroups.forEach((group) => map.set(group.table, group));
+    return map;
+  }, [tableGroups]);
+
+  const billGroup = billTable ? tableGroupMap.get(billTable) : null;
+  const billSummaryLines = useMemo(() => {
+    if (!billGroup) return [];
+    return buildReviewLines(
+      billGroup.items.map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        registerCode: item.registerCode ?? null,
+      }))
+    );
+  }, [billGroup]);
+
+  const sessionByTable = useMemo(() => {
+    const map = new Map<string, (typeof openSessions)[number]>();
+    openSessions.forEach((session) => map.set(session.table, session));
+    return map;
+  }, [openSessions]);
+
+  useEffect(() => {
+    if (!table) {
+      setActiveSessionId(null);
+      return;
+    }
+    const existing = sessionByTable.get(table);
+    setActiveSessionId(existing?.id ?? null);
+  }, [table, sessionByTable]);
 
   useEffect(() => {
     if (!activeCategoryId && categories.length > 0) {
@@ -224,8 +324,20 @@ const Cashier = () => {
       return;
     }
 
+    let sessionId = activeSessionId;
+    if (!sessionId) {
+      const created = await createSession(table);
+      if (!created.ok || !created.session) {
+        setFeedback(created.error ?? "Unable to open a session.");
+        return;
+      }
+      sessionId = created.session.id;
+      setActiveSessionId(sessionId);
+    }
+
     const result = await addOrder({
       table,
+      sessionId,
       items: cartItems.map((item) => ({
         name: item.menuItem.name,
         quantity: item.quantity,
@@ -245,6 +357,26 @@ const Cashier = () => {
     setCartItems([]);
     setFeedback("Order sent to the kitchen.");
     setOrderStep(1);
+    setActiveSessionId(null);
+  };
+
+  const sendPendingItems = async (sessionId: string) => {
+    if (cartItems.length === 0) {
+      return { ok: true, skipped: true };
+    }
+    const result = await addOrder({
+      table,
+      sessionId,
+      items: cartItems.map((item) => ({
+        name: item.menuItem.name,
+        quantity: item.quantity,
+        modifiers: item.modifiers,
+        price: item.menuItem.price,
+        registerCode: item.menuItem.register_code ?? undefined,
+        showInKitchen: item.menuItem.show_in_kitchen,
+      })),
+    });
+    return { ok: result.ok, error: result.error };
   };
 
   return (
@@ -320,11 +452,19 @@ const Cashier = () => {
                       className="group rounded-3xl border border-accent-3/60 bg-accent-1/80 p-5 text-left shadow-lg shadow-accent-4/20 transition hover:-translate-y-1 hover:border-brand/50"
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <h3 className="text-lg font-semibold text-contrast">{item.name}</h3>
-                          {item.description ? (
-                            <p className="mt-1 text-xs text-contrast/70">{item.description}</p>
-                          ) : null}
+                        <div className="flex items-start gap-3">
+                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-accent-3/60 bg-primary/60">
+                            <Icon
+                              icon={item.icon_name || fallbackIconName}
+                              className="h-6 w-6 text-brand"
+                            />
+                          </div>
+                          <div>
+                            <h3 className="text-lg font-semibold text-contrast">{item.name}</h3>
+                            {item.description ? (
+                              <p className="mt-1 text-xs text-contrast/70">{item.description}</p>
+                            ) : null}
+                          </div>
                         </div>
                         <span className="rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">
                           {formatCurrency(item.price)}
@@ -394,15 +534,24 @@ const Cashier = () => {
                   <div className="relative h-[300px] w-full max-w-md">
                     {tableLayout.map((entry) => {
                       const isSelected = table === entry.id;
+                      const hasBill = tableGroupMap.has(entry.id);
                       return (
                         <button
                           key={entry.id}
                           type="button"
-                          onClick={() => setTable(isSelected ? "" : entry.id)}
+                          onClick={() => {
+                            if (hasBill && !isSelected) {
+                              setBillTable(entry.id);
+                              return;
+                            }
+                            setTable(isSelected ? "" : entry.id);
+                          }}
                           className={`absolute flex items-center justify-center rounded-xl border text-sm font-semibold transition ${
                             isSelected
                               ? "border-brand/60 bg-brand text-white shadow-md shadow-brand/40"
-                              : "border-accent-3/60 bg-primary/80 text-contrast/70 hover:border-brand/50 hover:text-brand"
+                              : hasBill
+                                ? "border-emerald-400/50 bg-emerald-500/15 text-emerald-100 hover:border-brand/50 hover:text-brand"
+                                : "border-accent-3/60 bg-primary/80 text-contrast/70 hover:border-brand/50 hover:text-brand"
                           }`}
                           style={{
                             left: `${entry.x}%`,
@@ -421,28 +570,50 @@ const Cashier = () => {
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
-                    onClick={() => setTable(table === takeawayLabel ? "" : takeawayLabel)}
+                    onClick={() => {
+                      if (table === takeawayLabel) {
+                        setTable("");
+                        return;
+                      }
+                      if (tableGroupMap.has(takeawayLabel)) {
+                        setBillTable(takeawayLabel);
+                        return;
+                      }
+                      setTable(takeawayLabel);
+                    }}
                     className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
                       table === takeawayLabel
                         ? "border-brand/60 bg-brand text-white shadow-md shadow-brand/40"
-                        : "border-accent-3/60 bg-primary/70 text-contrast/70 hover:border-brand/50 hover:text-brand"
+                        : tableGroupMap.has(takeawayLabel)
+                          ? "border-emerald-400/50 bg-emerald-500/15 text-emerald-100 hover:border-brand/50 hover:text-brand"
+                          : "border-accent-3/60 bg-primary/70 text-contrast/70 hover:border-brand/50 hover:text-brand"
                     }`}
                   >
                     {takeawayLabel}
                   </button>
                 </div>
                 <p className="mt-2 text-xs text-contrast/60">
-                  {table ? "Tap the selected table to deselect." : "Select a table or takeaway."}
+                  {table
+                    ? "Tap the selected table to deselect."
+                    : "Select a table. Green tables have open bills."}
                 </p>
               </div>
               <button
                 type="button"
-                onClick={() => {
+                onClick={async () => {
                   if (!table.trim()) {
                     setFeedback("Select a table or takeaway to continue.");
                     return;
                   }
                   setFeedback(null);
+                  if (!activeSessionId) {
+                    const created = await createSession(table);
+                    if (!created.ok || !created.session) {
+                      setFeedback(created.error ?? "Unable to open a session.");
+                      return;
+                    }
+                    setActiveSessionId(created.session.id);
+                  }
                   setOrderStep(2);
                 }}
                 className="w-full rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
@@ -461,6 +632,11 @@ const Cashier = () => {
                   </span>
                 </div>
               </div>
+              {activeSessionId ? (
+                <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-100">
+                  Open bill active
+                </div>
+              ) : null}
 
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
@@ -469,12 +645,52 @@ const Cashier = () => {
                   </h3>
                   <span className="text-xs text-contrast/60">{cartItems.length} items</span>
                 </div>
+                {existingItems.length > 0 ? (
+                  <div className="space-y-3">
+                    <p className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
+                      Existing items
+                    </p>
+                    {existingItems.map((item, index) => {
+                      const modifierLines = Object.entries(item.modifiers ?? {})
+                        .filter(([, values]) => values.length > 0)
+                        .map(([group, values]) => `${group}: ${values.join(", ")}`);
+                      return (
+                        <div
+                          key={`existing-${index}`}
+                          className="rounded-2xl border border-accent-3/60 bg-accent-1/80 p-3 text-sm text-contrast"
+                        >
+                          <div className="flex items-center justify-between gap-3">
+                            <span className="font-semibold">
+                              {item.quantity} x {item.name}
+                            </span>
+                            {typeof item.price === "number" ? (
+                              <span className="text-[11px] text-contrast/60">
+                                {formatCurrency(item.price * item.quantity)}
+                              </span>
+                            ) : null}
+                          </div>
+                          {modifierLines.length ? (
+                            <div className="mt-1 text-[11px] text-contrast/60">
+                              {modifierLines.join(" | ")}
+                            </div>
+                          ) : null}
+                        </div>
+                      );
+                    })}
+                  </div>
+                ) : null}
+
                 {cartItems.length === 0 ? (
                   <p className="rounded-2xl border border-dashed border-accent-3/60 bg-primary/70 p-4 text-sm text-contrast/60">
                     Choose items from the menu cards to start the order.
                   </p>
                 ) : (
                   <div className="space-y-3">
+                    {existingItems.length > 0 ? (
+                      <p className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
+                        New items
+                      </p>
+                    ) : null}
                     {cartItems.map((item) => {
                       const modifierLines = Object.entries(item.modifiers)
                         .filter(([, values]) => values.length > 0)
@@ -534,9 +750,14 @@ const Cashier = () => {
                 <div className="flex items-center justify-between">
                   <span>Total</span>
                   <span className="text-base font-semibold text-contrast">
-                    {formatCurrency(cartTotal)}
+                    {formatCurrency(combinedTotal)}
                   </span>
                 </div>
+                {existingItems.length > 0 ? (
+                  <p className="mt-1 text-[11px] text-contrast/60">
+                    Includes {formatCurrency(existingTotal)} from existing items.
+                  </p>
+                ) : null}
               </div>
 
               {feedback ? <p className="text-sm text-contrast/70">{feedback}</p> : null}
@@ -576,6 +797,33 @@ const Cashier = () => {
                     >
                       Send to kitchen
                     </button>
+                    {activeSessionId ? (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const sendResult = await sendPendingItems(activeSessionId);
+                          if (!sendResult.ok) {
+                            setFeedback(sendResult.error ?? "Unable to send items.");
+                            return;
+                          }
+                          const closeResult = await closeSession(activeSessionId);
+                          if (!closeResult.ok) {
+                            setFeedback(closeResult.error ?? "Unable to close bill.");
+                            return;
+                          }
+                          setTable("");
+                          setCartItems([]);
+                          setFeedback(
+                            sendResult.skipped ? "Bill closed." : "Order sent and bill closed."
+                          );
+                          setOrderStep(1);
+                          setActiveSessionId(null);
+                        }}
+                        className="inline-flex items-center justify-center rounded-full border border-amber-400/40 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300 hover:text-amber-50"
+                      >
+                        Close bill
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       onClick={() => setOrderStep(2)}
@@ -592,6 +840,7 @@ const Cashier = () => {
                     setCartItems([]);
                     setFeedback(null);
                     setOrderStep(1);
+                    setActiveSessionId(null);
                   }}
                   className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
                 >
@@ -613,14 +862,22 @@ const Cashier = () => {
           />
           <div className="relative z-10 w-full max-w-xl rounded-3xl border border-accent-3/60 bg-primary p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                  Customize
-                </p>
-                <h2 className="text-2xl font-semibold text-contrast">{selectedItem.name}</h2>
-                {selectedItem.description ? (
-                  <p className="mt-2 text-sm text-contrast/70">{selectedItem.description}</p>
-                ) : null}
+              <div className="flex items-start gap-4">
+                <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-accent-3/60 bg-primary/60">
+                  <Icon
+                    icon={selectedItem.icon_name || fallbackIconName}
+                    className="h-6 w-6 text-brand"
+                  />
+                </div>
+                <div>
+                  <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
+                    Customize
+                  </p>
+                  <h2 className="text-2xl font-semibold text-contrast">{selectedItem.name}</h2>
+                  {selectedItem.description ? (
+                    <p className="mt-2 text-sm text-contrast/70">{selectedItem.description}</p>
+                  ) : null}
+                </div>
               </div>
               <span className="rounded-full border border-brand/40 bg-brand/10 px-4 py-2 text-sm font-semibold text-brand">
                 {formatCurrency(selectedItem.price)}
@@ -701,6 +958,144 @@ const Cashier = () => {
                   Add to order
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {billGroup ? (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary/70 backdrop-blur p-4">
+          <button
+            type="button"
+            aria-label="Close"
+            className="absolute inset-0"
+            onClick={() => setBillTable(null)}
+          />
+          <div className="relative z-10 flex w-full max-w-2xl max-h-[85vh] flex-col overflow-hidden rounded-3xl border border-accent-3/60 bg-primary p-6 shadow-2xl">
+            <div className="flex items-start justify-between gap-4">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
+                  Open bill
+                </p>
+                <h2 className="text-2xl font-semibold text-contrast">
+                  {billGroup.table === takeawayLabel ? takeawayLabel : `Table ${billGroup.table}`}
+                </h2>
+                <p className="mt-1 text-xs text-contrast/60">
+                  {billGroup.ordersCount} order{billGroup.ordersCount === 1 ? "" : "s"}
+                </p>
+              </div>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  type="button"
+                  onClick={async () => {
+                    const result = await closeSession(billGroup.sessionId);
+                    if (!result.ok) {
+                      setFeedback(result.error ?? "Unable to close bill.");
+                      return;
+                    }
+                    setBillTable(null);
+                  }}
+                  className="rounded-full border border-amber-400/40 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300 hover:text-amber-50"
+                >
+                  Close bill
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTable(billGroup.table);
+                    setActiveSessionId(billGroup.sessionId);
+                    setOrderStep(2);
+                    setBillTable(null);
+                  }}
+                  className="rounded-full bg-brand px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5"
+                >
+                  Add items
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setBillTable(null)}
+                  className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                >
+                  Close
+                </button>
+              </div>
+            </div>
+
+            <div className="mt-6 grid flex-1 min-h-0 gap-6 overflow-hidden lg:grid-cols-[1.2fr_0.8fr]">
+              <section className="no-scrollbar min-h-0 space-y-3 overflow-y-auto pr-2">
+                <h3 className="text-sm font-semibold uppercase tracking-wide text-contrast/70">
+                  Detailed items
+                </h3>
+                <div className="space-y-3">
+                  {billGroup.items.map((item, index) => {
+                    const modifierLines = formatModifierLines(item.modifiers);
+                    return (
+                      <div
+                        key={`${billGroup.table}-${index}`}
+                        className="rounded-2xl border border-accent-3/60 bg-accent-1/80 p-3"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <span className="font-semibold">
+                            {item.quantity} x {item.name}
+                          </span>
+                          {typeof item.price === "number" ? (
+                            <span className="text-[11px] text-contrast/60">
+                              {formatCurrency(item.price * item.quantity)}
+                            </span>
+                          ) : null}
+                        </div>
+                        {modifierLines.length ? (
+                          <div className="mt-1 space-y-1 text-[11px] text-contrast/60">
+                            {modifierLines.map((line) => (
+                              <div key={line}>{line}</div>
+                            ))}
+                          </div>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              </section>
+
+              <aside className="no-scrollbar min-h-0 space-y-4 overflow-y-auto pr-2">
+                <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast/70">
+                  <div className="flex items-center justify-between">
+                    <span>Total</span>
+                    <span className="text-base font-semibold text-contrast">
+                      {formatCurrency(
+                        billGroup.items.reduce(
+                          (sum, item) => sum + (item.price ?? 0) * item.quantity,
+                          0
+                        )
+                      )}
+                    </span>
+                  </div>
+                </div>
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold uppercase tracking-wide text-contrast/70">
+                    Summary
+                  </h3>
+                  {billSummaryLines.length === 0 ? (
+                    <p className="text-sm text-contrast/60">No items in this bill.</p>
+                  ) : (
+                    <div className="space-y-2">
+                      {billSummaryLines.map((line) => (
+                        <div
+                          key={`${line.name}-${line.registerCode ?? "none"}`}
+                          className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast"
+                        >
+                          <p className="font-semibold">
+                            {line.quantity}x {line.name}
+                          </p>
+                          <p className="text-xs text-contrast/60">
+                            Code {line.registerCode ?? "—"}
+                          </p>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </aside>
             </div>
           </div>
         </div>
