@@ -8,11 +8,15 @@ export type OrderItem = {
   quantity: number;
   modifiers?: Record<string, string[]>;
   price?: number;
+  registerCode?: string;
+  showInKitchen?: boolean;
+  done?: boolean;
 };
 
 export type Order = {
   id: string;
   table: string;
+  sessionId: string | null;
   items: OrderItem[];
   notes: string;
   status: OrderStatus;
@@ -21,6 +25,7 @@ export type Order = {
 
 type NewOrderInput = {
   table: string;
+  sessionId?: string | null;
   items: OrderItem[];
   notes?: string;
 };
@@ -31,6 +36,7 @@ type OrdersContextValue = {
   error: string | null;
   addOrder: (input: NewOrderInput) => Promise<{ ok: boolean; error?: string }>;
   updateStatus: (id: string, status: OrderStatus) => Promise<void>;
+  updateItemDone: (id: string, itemIndex: number, done: boolean) => Promise<void>;
   removeOrder: (id: string) => Promise<void>;
   clearServed: () => Promise<void>;
 };
@@ -40,6 +46,7 @@ const TABLE_NAME = "kiosk_orders";
 type OrderRow = {
   id: string;
   table_number: string;
+  session_id: string | null;
   items: OrderItem[] | null;
   notes: string | null;
   status: string | null;
@@ -54,6 +61,7 @@ const isOrderStatus = (value: string | null): value is OrderStatus =>
 const mapRowToOrder = (row: OrderRow): Order => ({
   id: row.id,
   table: row.table_number,
+  sessionId: row.session_id ?? null,
   items: Array.isArray(row.items) ? row.items : [],
   notes: row.notes ?? "",
   status: isOrderStatus(row.status) ? row.status : "new",
@@ -101,11 +109,16 @@ export const OrdersProvider = ({ children }: { children: React.ReactNode }) => {
     };
   }, [fetchOrders]);
 
-  const addOrder = useCallback(async ({ table, items, notes }: NewOrderInput) => {
+  const addOrder = useCallback(async ({ table, items, notes, sessionId }: NewOrderInput) => {
     const cleanedItems = items
       .map((item) => ({
         name: item.name.trim(),
         quantity: Math.max(1, Math.floor(item.quantity)),
+        modifiers: item.modifiers ?? {},
+        price: typeof item.price === "number" ? item.price : undefined,
+        registerCode: item.registerCode ?? undefined,
+        showInKitchen: item.showInKitchen ?? true,
+        done: item.done ?? false,
       }))
       .filter((item) => item.name.length > 0);
 
@@ -115,6 +128,7 @@ export const OrdersProvider = ({ children }: { children: React.ReactNode }) => {
 
     const { error: insertError } = await supabase.from(TABLE_NAME).insert({
       table_number: table.trim(),
+      session_id: sessionId ?? null,
       items: cleanedItems,
       notes: notes?.trim() ?? "",
       status: "new",
@@ -146,6 +160,31 @@ export const OrdersProvider = ({ children }: { children: React.ReactNode }) => {
     await fetchOrders();
   }, [fetchOrders]);
 
+  const updateItemDone = useCallback(
+    async (id: string, itemIndex: number, done: boolean) => {
+      const order = orders.find((current) => current.id === id);
+      if (!order) return;
+
+      const nextItems = order.items.map((item, index) =>
+        index === itemIndex ? { ...item, done } : item
+      );
+
+      const { error: updateError } = await supabase
+        .from(TABLE_NAME)
+        .update({ items: nextItems })
+        .eq("id", id);
+
+      if (updateError) {
+        setError(updateError.message);
+        return;
+      }
+
+      setError(null);
+      await fetchOrders();
+    },
+    [orders, fetchOrders]
+  );
+
   const removeOrder = useCallback(async (id: string) => {
     const { error: deleteError } = await supabase.from(TABLE_NAME).delete().eq("id", id);
     if (deleteError) {
@@ -175,10 +214,11 @@ export const OrdersProvider = ({ children }: { children: React.ReactNode }) => {
       error,
       addOrder,
       updateStatus,
+      updateItemDone,
       removeOrder,
       clearServed,
     }),
-    [orders, isLoading, error, addOrder, updateStatus, removeOrder, clearServed]
+    [orders, isLoading, error, addOrder, updateStatus, updateItemDone, removeOrder, clearServed]
   );
 
   return <OrdersContext.Provider value={value}>{children}</OrdersContext.Provider>;

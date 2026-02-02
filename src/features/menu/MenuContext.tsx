@@ -20,19 +20,23 @@ export type MenuItem = {
   id: string;
   name: string;
   price: number;
+  register_code: string | null;
   category_id: string;
   description: string | null;
   allow_sauces: boolean;
   allow_sides: boolean;
+  show_in_kitchen: boolean;
 };
 
 type AddItemInput = {
   name: string;
   price: number;
+  register_code?: string;
   category_id: string;
   description?: string;
   allow_sauces: boolean;
   allow_sides: boolean;
+  show_in_kitchen?: boolean;
 };
 
 type MenuContextValue = {
@@ -47,6 +51,10 @@ type MenuContextValue = {
   addSauce: (name: string) => Promise<{ ok: boolean; error?: string }>;
   addSide: (name: string) => Promise<{ ok: boolean; error?: string }>;
   addItem: (input: AddItemInput) => Promise<{ ok: boolean; error?: string }>;
+  updateCategory: (id: string, name: string) => Promise<{ ok: boolean; error?: string }>;
+  updateSauce: (id: string, name: string) => Promise<{ ok: boolean; error?: string }>;
+  updateSide: (id: string, name: string) => Promise<{ ok: boolean; error?: string }>;
+  updateItem: (input: AddItemInput & { id: string }) => Promise<{ ok: boolean; error?: string }>;
 };
 
 const TABLES = {
@@ -61,6 +69,7 @@ const MenuContext = createContext<MenuContextValue | undefined>(undefined);
 const normalizeItem = (item: MenuItem) => ({
   ...item,
   price: Number(item.price),
+  show_in_kitchen: item.show_in_kitchen ?? true,
 });
 
 export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
@@ -188,15 +197,119 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
       const { error: insertError } = await supabase.from(TABLES.items).insert({
         name: trimmedName,
         price: input.price,
+        register_code: input.register_code?.trim() || null,
         category_id: input.category_id,
         description: input.description?.trim() || null,
         allow_sauces: input.allow_sauces,
         allow_sides: input.allow_sides,
+        show_in_kitchen: input.show_in_kitchen ?? true,
       });
 
       if (insertError) {
         setError(insertError.message);
         return { ok: false, error: insertError.message };
+      }
+
+      setError(null);
+      await refresh();
+      return { ok: true };
+    },
+    [refresh]
+  );
+
+  const updateCategory = useCallback(
+    async (id: string, name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) {
+        return { ok: false, error: "Category name is required." };
+      }
+      const { error: updateError } = await supabase
+        .from(TABLES.categories)
+        .update({ name: trimmed })
+        .eq("id", id);
+      if (updateError) {
+        setError(updateError.message);
+        return { ok: false, error: updateError.message };
+      }
+      setError(null);
+      await refresh();
+      return { ok: true };
+    },
+    [refresh]
+  );
+
+  const updateSauce = useCallback(
+    async (id: string, name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) {
+        return { ok: false, error: "Sauce name is required." };
+      }
+      const { error: updateError } = await supabase
+        .from(TABLES.sauces)
+        .update({ name: trimmed })
+        .eq("id", id);
+      if (updateError) {
+        setError(updateError.message);
+        return { ok: false, error: updateError.message };
+      }
+      setError(null);
+      await refresh();
+      return { ok: true };
+    },
+    [refresh]
+  );
+
+  const updateSide = useCallback(
+    async (id: string, name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) {
+        return { ok: false, error: "Side name is required." };
+      }
+      const { error: updateError } = await supabase
+        .from(TABLES.sides)
+        .update({ name: trimmed })
+        .eq("id", id);
+      if (updateError) {
+        setError(updateError.message);
+        return { ok: false, error: updateError.message };
+      }
+      setError(null);
+      await refresh();
+      return { ok: true };
+    },
+    [refresh]
+  );
+
+  const updateItem = useCallback(
+    async (input: AddItemInput & { id: string }) => {
+      const trimmedName = input.name.trim();
+      if (!trimmedName) {
+        return { ok: false, error: "Item name is required." };
+      }
+      if (!input.category_id) {
+        return { ok: false, error: "Pick a category for the item." };
+      }
+      if (!Number.isFinite(input.price) || input.price < 0) {
+        return { ok: false, error: "Enter a valid price." };
+      }
+
+      const { error: updateError } = await supabase
+        .from(TABLES.items)
+        .update({
+          name: trimmedName,
+          price: input.price,
+          register_code: input.register_code?.trim() || null,
+          category_id: input.category_id,
+          description: input.description?.trim() || null,
+          allow_sauces: input.allow_sauces,
+          allow_sides: input.allow_sides,
+          show_in_kitchen: input.show_in_kitchen ?? true,
+        })
+        .eq("id", input.id);
+
+      if (updateError) {
+        setError(updateError.message);
+        return { ok: false, error: updateError.message };
       }
 
       setError(null);
@@ -219,8 +332,28 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
       addSauce,
       addSide,
       addItem,
+      updateCategory,
+      updateSauce,
+      updateSide,
+      updateItem,
     }),
-    [categories, sauces, sides, items, isLoading, error, refresh, addCategory, addSauce, addSide, addItem]
+    [
+      categories,
+      sauces,
+      sides,
+      items,
+      isLoading,
+      error,
+      refresh,
+      addCategory,
+      addSauce,
+      addSide,
+      addItem,
+      updateCategory,
+      updateSauce,
+      updateSide,
+      updateItem,
+    ]
   );
 
   return <MenuContext.Provider value={value}>{children}</MenuContext.Provider>;

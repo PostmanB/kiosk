@@ -24,3 +24,13 @@
   --color-accent-4: 71 85 105; /* #475569 */
   --color-contrast: 248 250 252; /* #f8fafc */
 }
+
+.no-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+.no-scrollbar::-webkit-scrollbar {
+  width: 0;
+  height: 0;
+}

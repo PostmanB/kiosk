@@ -6,28 +6,30 @@ const statusStyles: Record<"new" | "served", string> = {
   served: "border-slate-500/30 bg-slate-500/15 text-slate-300",
 };
 
+const formatCurrency = (value: number) => `EUR ${value.toFixed(2)}`;
+
 const formatTime = (value: string) =>
   new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
-const formatModifiers = (modifiers?: Record<string, string[]>) => {
-  if (!modifiers) return "";
-  const entries = Object.entries(modifiers)
+const formatModifierLines = (modifiers?: Record<string, string[]>) => {
+  if (!modifiers) return [];
+  return Object.entries(modifiers)
     .map(([group, values]) => {
       if (!values || values.length === 0) return null;
       return `${group}: ${values.join(", ")}`;
     })
-    .filter(Boolean);
-  return entries.length ? entries.join(" | ") : "";
+    .filter(Boolean) as string[];
 };
 
 const Kitchen = () => {
-  const { orders, updateStatus, removeOrder, clearServed, isLoading, error } = useOrders();
+  const { orders, updateStatus, updateItemDone, removeOrder, clearServed, isLoading, error } =
+    useOrders();
   const [showServed, setShowServed] = useState(false);
 
   const groupedOrders = useMemo(
     () => ({
-      new: orders.filter((order) => order.status !== "served"),
-      served: orders.filter((order) => order.status === "served"),
+      new: orders.filter((order) => order.status !== "served").slice().reverse(),
+      served: orders.filter((order) => order.status === "served").slice().reverse(),
     }),
     [orders]
   );
@@ -72,7 +74,7 @@ const Kitchen = () => {
         </div>
       ) : null}
 
-      <div className="grid gap-6 lg:grid-cols-2">
+      <div className="space-y-8">
         <section className="rounded-3xl border border-accent-3/60 bg-accent-1/80 p-6 shadow-lg shadow-accent-4/20">
           <div className="flex items-center justify-between">
             <h2 className="text-lg font-semibold text-contrast">New Orders</h2>
@@ -90,46 +92,104 @@ const Kitchen = () => {
                 No new orders right now.
               </p>
             ) : (
-              groupedOrders.new.map((order) => (
-                <article
-                  key={order.id}
-                  className="rounded-2xl border border-accent-3/60 bg-primary/70 p-4 text-sm text-contrast"
-                >
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <p className="text-base font-semibold">Table {order.table}</p>
-                      <p className="text-xs text-contrast/60">Placed {formatTime(order.createdAt)}</p>
-                    </div>
-                    <button
-                      type="button"
-                      onClick={() => updateStatus(order.id, "served")}
-                      className="rounded-full bg-brand px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow shadow-brand/40 transition hover:-translate-y-0.5"
+              <div className="flex gap-4 overflow-x-auto pb-4">
+                {groupedOrders.new.map((order) => {
+                  const displayItems = order.items
+                    .map((item, index) => ({ item, index }))
+                    .filter(({ item }) => item.showInKitchen !== false);
+                  const itemCount = displayItems.reduce(
+                    (sum, entry) => sum + entry.item.quantity,
+                    0
+                  );
+                  const doneCount = displayItems.reduce(
+                    (sum, entry) => sum + (entry.item.done ? entry.item.quantity : 0),
+                    0
+                  );
+                  const orderTotal = order.items.reduce(
+                    (sum, item) => sum + (item.price ?? 0) * item.quantity,
+                    0
+                  );
+                  const showTotal = order.items.some(
+                    (item) => typeof item.price === "number" && !Number.isNaN(item.price)
+                  );
+
+                  return (
+                    <article
+                      key={order.id}
+                      className="flex w-[320px] flex-shrink-0 flex-col gap-4 rounded-3xl border-2 border-dashed border-accent-3/60 bg-primary/80 p-5 text-sm text-contrast shadow-lg shadow-accent-4/20"
                     >
-                      Mark served
-                    </button>
-                  </div>
-                  <ul className="mt-3 space-y-1 text-xs text-contrast/80">
-                    {order.items.map((item, index) => {
-                      const modifiers = formatModifiers(item.modifiers);
-                      return (
-                        <li key={`${order.id}-${index}`} className="space-y-1">
-                          <div>
-                            {item.quantity} x {item.name}
-                          </div>
-                          {modifiers ? (
-                            <div className="text-[11px] text-contrast/60">{modifiers}</div>
-                          ) : null}
-                        </li>
-                      );
-                    })}
-                  </ul>
-                  {order.notes ? (
-                    <p className="mt-3 rounded-xl border border-accent-3/60 bg-accent-2/70 p-3 text-xs text-contrast/70">
-                      {order.notes}
-                    </p>
-                  ) : null}
-                </article>
-              ))
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="text-lg font-semibold">Table {order.table}</p>
+                          <p className="text-xs text-contrast/60">
+                            Placed {formatTime(order.createdAt)} • {doneCount}/{itemCount} done
+                          </p>
+                        </div>
+                        {showTotal ? (
+                          <span className="rounded-full border border-accent-3/60 px-2 py-1 text-xs font-semibold text-contrast/70">
+                            {formatCurrency(orderTotal)}
+                          </span>
+                        ) : null}
+                      </div>
+                      <ul className="space-y-2 text-xs text-contrast/80">
+                        {displayItems.length === 0 ? (
+                          <li className="text-[11px] text-contrast/60">
+                            No kitchen items for this order.
+                          </li>
+                        ) : (
+                          displayItems.map(({ item, index }) => {
+                            const modifierLines = formatModifierLines(item.modifiers);
+                            return (
+                              <li key={`${order.id}-${index}`} className="space-y-1">
+                                <div className="flex items-center justify-between gap-3">
+                                  <div className="flex items-center gap-2">
+                                    <button
+                                      type="button"
+                                      onClick={() => updateItemDone(order.id, index, !item.done)}
+                                      className={`flex h-6 w-6 items-center justify-center rounded-full border text-[11px] font-semibold transition ${
+                                        item.done
+                                          ? "border-emerald-400/60 bg-emerald-500/20 text-emerald-200"
+                                          : "border-accent-3/60 text-contrast/60 hover:border-brand/50 hover:text-brand"
+                                      }`}
+                                      aria-pressed={item.done}
+                                    >
+                                      {item.done ? "✓" : ""}
+                                    </button>
+                                    <span
+                                      className={item.done ? "text-contrast/50 line-through" : ""}
+                                    >
+                                      {item.quantity} x {item.name}
+                                    </span>
+                                  </div>
+                                  {typeof item.price === "number" ? (
+                                    <span className="text-[11px] text-contrast/60">
+                                      {formatCurrency(item.price * item.quantity)}
+                                    </span>
+                                  ) : null}
+                                </div>
+                                {modifierLines.length ? (
+                                  <div className="space-y-1 text-[11px] text-contrast/60">
+                                    {modifierLines.map((line) => (
+                                      <div key={line}>{line}</div>
+                                    ))}
+                                  </div>
+                                ) : null}
+                              </li>
+                            );
+                          })
+                        )}
+                      </ul>
+                      <button
+                        type="button"
+                        onClick={() => updateStatus(order.id, "served")}
+                        className="mt-auto rounded-full bg-brand px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow shadow-brand/40 transition hover:-translate-y-0.5"
+                      >
+                        Mark served
+                      </button>
+                    </article>
+                  );
+                })}
+              </div>
             )}
           </div>
         </section>
@@ -152,48 +212,92 @@ const Kitchen = () => {
                   No served orders right now.
                 </p>
               ) : (
-                groupedOrders.served.map((order) => (
-                  <article
-                    key={order.id}
-                    className="rounded-2xl border border-accent-3/60 bg-primary/70 p-4 text-sm text-contrast"
-                  >
-                    <div className="flex items-center justify-between">
-                      <div>
-                        <p className="text-base font-semibold">Table {order.table}</p>
-                        <p className="text-xs text-contrast/60">
-                          Served {formatTime(order.createdAt)}
-                        </p>
-                      </div>
-                      <button
-                        type="button"
-                        onClick={() => removeOrder(order.id)}
-                        className="rounded-full border border-rose-500/40 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-rose-300 transition hover:bg-rose-500/10"
+                <div className="flex gap-4 overflow-x-auto pb-4">
+                  {groupedOrders.served.map((order) => {
+                    const displayItems = order.items
+                      .map((item, index) => ({ item, index }))
+                      .filter(({ item }) => item.showInKitchen !== false);
+                    const itemCount = displayItems.reduce(
+                      (sum, entry) => sum + entry.item.quantity,
+                      0
+                    );
+                    const doneCount = displayItems.reduce(
+                      (sum, entry) => sum + (entry.item.done ? entry.item.quantity : 0),
+                      0
+                    );
+                    const orderTotal = order.items.reduce(
+                      (sum, item) => sum + (item.price ?? 0) * item.quantity,
+                      0
+                    );
+                    const showTotal = order.items.some(
+                      (item) => typeof item.price === "number" && !Number.isNaN(item.price)
+                    );
+
+                    return (
+                      <article
+                        key={order.id}
+                        className="flex w-[320px] flex-shrink-0 flex-col gap-4 rounded-3xl border border-accent-3/60 bg-primary/70 p-5 text-sm text-contrast"
                       >
-                        Remove
-                      </button>
-                    </div>
-                    <ul className="mt-3 space-y-1 text-xs text-contrast/80">
-                      {order.items.map((item, index) => {
-                        const modifiers = formatModifiers(item.modifiers);
-                        return (
-                          <li key={`${order.id}-${index}`} className="space-y-1">
-                            <div>
-                              {item.quantity} x {item.name}
-                            </div>
-                            {modifiers ? (
-                              <div className="text-[11px] text-contrast/60">{modifiers}</div>
-                            ) : null}
-                          </li>
-                        );
-                      })}
-                    </ul>
-                    {order.notes ? (
-                      <p className="mt-3 rounded-xl border border-accent-3/60 bg-accent-2/70 p-3 text-xs text-contrast/70">
-                        {order.notes}
-                      </p>
-                    ) : null}
-                  </article>
-                ))
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                          <p className="text-lg font-semibold">Table {order.table}</p>
+                          <p className="text-xs text-contrast/60">
+                            Served {formatTime(order.createdAt)} • {doneCount}/{itemCount} done
+                          </p>
+                        </div>
+                          {showTotal ? (
+                            <span className="rounded-full border border-accent-3/60 px-2 py-1 text-xs font-semibold text-contrast/70">
+                              {formatCurrency(orderTotal)}
+                            </span>
+                          ) : null}
+                        </div>
+                        <ul className="space-y-2 text-xs text-contrast/80">
+                          {displayItems.length === 0 ? (
+                            <li className="text-[11px] text-contrast/60">
+                              No kitchen items for this order.
+                            </li>
+                          ) : (
+                            displayItems.map(({ item, index }) => {
+                              const modifierLines = formatModifierLines(item.modifiers);
+                              return (
+                                <li key={`${order.id}-${index}`} className="space-y-1">
+                                  <div className="flex items-center justify-between gap-3">
+                                    <span
+                                      className={
+                                        item.done ? "text-contrast/50 line-through" : ""
+                                      }
+                                    >
+                                      {item.quantity} x {item.name}
+                                    </span>
+                                    {typeof item.price === "number" ? (
+                                      <span className="text-[11px] text-contrast/60">
+                                        {formatCurrency(item.price * item.quantity)}
+                                      </span>
+                                    ) : null}
+                                  </div>
+                                  {modifierLines.length ? (
+                                    <div className="space-y-1 text-[11px] text-contrast/60">
+                                      {modifierLines.map((line) => (
+                                        <div key={line}>{line}</div>
+                                      ))}
+                                    </div>
+                                  ) : null}
+                                </li>
+                              );
+                            })
+                          )}
+                        </ul>
+                        <button
+                          type="button"
+                          onClick={() => removeOrder(order.id)}
+                          className="mt-auto rounded-full border border-rose-500/40 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-rose-300 transition hover:bg-rose-500/10"
+                        >
+                          Remove
+                        </button>
+                      </article>
+                    );
+                  })}
+                </div>
               )}
             </div>
           </section>
