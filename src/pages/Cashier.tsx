@@ -1,5 +1,7 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useOrders } from "../features/orders/OrdersContext";
+import { useMenu } from "../features/menu/MenuContext";
+import type { MenuItem } from "../features/menu/MenuContext";
 
 type MenuModifierGroup = {
   id: string;
@@ -8,378 +10,12 @@ type MenuModifierGroup = {
   options: string[];
 };
 
-type MenuItem = {
-  id: string;
-  name: string;
-  price: number;
-  category: string;
-  description?: string;
-  modifiers?: MenuModifierGroup[];
-};
-
 type CartItem = {
   id: string;
   menuItem: MenuItem;
   quantity: number;
   modifiers: Record<string, string[]>;
 };
-
-const MENU_ITEMS: MenuItem[] = [
-  {
-    id: "hamburger",
-    name: "Hamburger",
-    price: 2.7,
-    category: "Burgery",
-    description: "Classic beef burger with fresh garnish.",
-    modifiers: [
-      {
-        id: "Sauce",
-        label: "Sauce",
-        type: "single",
-        options: ["No sauce", "Gyros", "Garlic", "Chili", "Mushroom", "Ketchup", "Tatarska"],
-      },
-      {
-        id: "Side",
-        label: "Side",
-        type: "single",
-        options: ["No side", "Hranolky", "Americke zemiaky", "Salat"],
-      },
-      {
-        id: "Extras",
-        label: "Extras",
-        type: "multi",
-        options: ["Extra syr", "Extra slanina", "Jalapeno"],
-      },
-    ],
-  },
-  {
-    id: "cheeseburger",
-    name: "Cheeseburger",
-    price: 3.0,
-    category: "Burgery",
-    description: "Melted cheese, grilled beef, soft bun.",
-    modifiers: [
-      {
-        id: "Sauce",
-        label: "Sauce",
-        type: "single",
-        options: ["No sauce", "Gyros", "Garlic", "Chili", "Mushroom", "Ketchup", "Tatarska"],
-      },
-      {
-        id: "Side",
-        label: "Side",
-        type: "single",
-        options: ["No side", "Hranolky", "Americke zemiaky", "Salat"],
-      },
-      {
-        id: "Extras",
-        label: "Extras",
-        type: "multi",
-        options: ["Extra syr", "Extra slanina", "Jalapeno"],
-      },
-    ],
-  },
-  {
-    id: "chicken-burger",
-    name: "Chicken burger",
-    price: 4.1,
-    category: "Burgery",
-    description: "Crispy chicken fillet, light sauce.",
-    modifiers: [
-      {
-        id: "Sauce",
-        label: "Sauce",
-        type: "single",
-        options: ["No sauce", "Gyros", "Garlic", "Chili", "Mushroom", "Ketchup", "Tatarska"],
-      },
-      {
-        id: "Side",
-        label: "Side",
-        type: "single",
-        options: ["No side", "Hranolky", "Americke zemiaky", "Salat"],
-      },
-      {
-        id: "Extras",
-        label: "Extras",
-        type: "multi",
-        options: ["Extra syr", "Extra slanina", "Jalapeno"],
-      },
-    ],
-  },
-  {
-    id: "doubleburger",
-    name: "Doubleburger",
-    price: 3.5,
-    category: "Burgery",
-    description: "Two patties, double appetite.",
-    modifiers: [
-      {
-        id: "Sauce",
-        label: "Sauce",
-        type: "single",
-        options: ["No sauce", "Gyros", "Garlic", "Chili", "Mushroom", "Ketchup", "Tatarska"],
-      },
-      {
-        id: "Side",
-        label: "Side",
-        type: "single",
-        options: ["No side", "Hranolky", "Americke zemiaky", "Salat"],
-      },
-      {
-        id: "Extras",
-        label: "Extras",
-        type: "multi",
-        options: ["Extra syr", "Extra slanina", "Jalapeno"],
-      },
-    ],
-  },
-  {
-    id: "gyros-plate",
-    name: "Gyros na tanieri",
-    price: 4.1,
-    category: "Gyros",
-    description: "Gyros served on a plate with a side.",
-    modifiers: [
-      {
-        id: "Sauce",
-        label: "Sauce",
-        type: "single",
-        options: ["No sauce", "Gyros", "Garlic", "Chili", "Mushroom", "Ketchup", "Tatarska"],
-      },
-      {
-        id: "Side",
-        label: "Side",
-        type: "single",
-        options: ["Ryza", "Hranolky", "Americke zemiaky"],
-      },
-    ],
-  },
-  {
-    id: "gyros-pita",
-    name: "Gyros pita",
-    price: 3.5,
-    category: "Gyros",
-    description: "Gyros wrapped in warm pita.",
-    modifiers: [
-      {
-        id: "Sauce",
-        label: "Sauce",
-        type: "single",
-        options: ["No sauce", "Gyros", "Garlic", "Chili", "Mushroom", "Ketchup", "Tatarska"],
-      },
-    ],
-  },
-  {
-    id: "gyros-twister",
-    name: "Gyros twister",
-    price: 3.5,
-    category: "Gyros",
-    description: "Gyros wrap with fresh salad.",
-    modifiers: [
-      {
-        id: "Sauce",
-        label: "Sauce",
-        type: "single",
-        options: ["No sauce", "Gyros", "Garlic", "Chili", "Mushroom", "Ketchup", "Tatarska"],
-      },
-    ],
-  },
-  {
-    id: "gyros-tornado",
-    name: "Gyros tornado",
-    price: 3.6,
-    category: "Gyros",
-    description: "Wrap with crispy onion and cheese.",
-    modifiers: [
-      {
-        id: "Sauce",
-        label: "Sauce",
-        type: "single",
-        options: ["No sauce", "Gyros", "Garlic", "Chili", "Mushroom", "Ketchup", "Tatarska"],
-      },
-    ],
-  },
-  {
-    id: "veggieburger",
-    name: "Veggieburger",
-    price: 3.0,
-    category: "Burgery",
-    description: "Plant-based patty and crisp toppings.",
-    modifiers: [
-      {
-        id: "Sauce",
-        label: "Sauce",
-        type: "single",
-        options: ["No sauce", "Gyros", "Garlic", "Chili", "Mushroom", "Ketchup", "Tatarska"],
-      },
-      {
-        id: "Side",
-        label: "Side",
-        type: "single",
-        options: ["No side", "Hranolky", "Americke zemiaky", "Salat"],
-      },
-      {
-        id: "Extras",
-        label: "Extras",
-        type: "multi",
-        options: ["Extra syr", "Extra slanina", "Jalapeno"],
-      },
-    ],
-  },
-  {
-    id: "hranolky",
-    name: "Hranolky",
-    price: 1.6,
-    category: "Prilohy",
-    description: "Golden fries, lightly salted.",
-    modifiers: [
-      {
-        id: "Dip",
-        label: "Dip",
-        type: "single",
-        options: ["No dip", "Kecup", "Majoneza", "Tatarska"],
-      },
-      {
-        id: "Size",
-        label: "Size",
-        type: "single",
-        options: ["Small", "Medium", "Large"],
-      },
-    ],
-  },
-  {
-    id: "americke-zemiaky",
-    name: "Americke zemiaky",
-    price: 1.6,
-    category: "Prilohy",
-    description: "Seasoned potato wedges.",
-    modifiers: [
-      {
-        id: "Dip",
-        label: "Dip",
-        type: "single",
-        options: ["No dip", "Kecup", "Majoneza", "Tatarska"],
-      },
-      {
-        id: "Size",
-        label: "Size",
-        type: "single",
-        options: ["Small", "Medium", "Large"],
-      },
-    ],
-  },
-  {
-    id: "cibulove-kruzky",
-    name: "Cibulove kruzky",
-    price: 1.7,
-    category: "Prilohy",
-    description: "Crunchy onion rings.",
-    modifiers: [
-      {
-        id: "Dip",
-        label: "Dip",
-        type: "single",
-        options: ["No dip", "Kecup", "Majoneza", "Tatarska"],
-      },
-    ],
-  },
-  {
-    id: "krokety",
-    name: "Krokety",
-    price: 1.6,
-    category: "Prilohy",
-    description: "Potato croquettes, crispy outside.",
-    modifiers: [
-      {
-        id: "Dip",
-        label: "Dip",
-        type: "single",
-        options: ["No dip", "Kecup", "Majoneza", "Tatarska"],
-      },
-    ],
-  },
-  {
-    id: "palacinky",
-    name: "Palacinky",
-    price: 1.6,
-    category: "Dezerty",
-    description: "Sweet crepes with light filling.",
-    modifiers: [
-      {
-        id: "Filling",
-        label: "Filling",
-        type: "single",
-        options: ["Nutella", "Dzem", "Tvaroh"],
-      },
-    ],
-  },
-  {
-    id: "gofry",
-    name: "Gofry",
-    price: 1.7,
-    category: "Dezerty",
-    description: "Warm waffles with toppings.",
-    modifiers: [
-      {
-        id: "Topping",
-        label: "Topping",
-        type: "multi",
-        options: ["Nutella", "Ovocie", "Slag", "Coko"],
-      },
-    ],
-  },
-  {
-    id: "cola",
-    name: "Cola 0.5l",
-    price: 1.2,
-    category: "Napoje",
-    description: "Chilled soft drink.",
-    modifiers: [
-      {
-        id: "Ice",
-        label: "Ice",
-        type: "single",
-        options: ["No ice", "Ice"],
-      },
-      {
-        id: "Lid",
-        label: "Lid",
-        type: "single",
-        options: ["No lid", "With lid"],
-      },
-    ],
-  },
-  {
-    id: "voda",
-    name: "Voda 0.5l",
-    price: 0.8,
-    category: "Napoje",
-    description: "Still water.",
-    modifiers: [
-      {
-        id: "Ice",
-        label: "Ice",
-        type: "single",
-        options: ["No ice", "Ice"],
-      },
-    ],
-  },
-  {
-    id: "kava-espresso",
-    name: "Kava espresso",
-    price: 1.2,
-    category: "Napoje",
-    description: "Strong, quick espresso shot.",
-    modifiers: [
-      {
-        id: "Milk",
-        label: "Milk",
-        type: "single",
-        options: ["No milk", "A little milk", "Extra milk"],
-      },
-    ],
-  },
-];
 
 const formatCurrency = (value: number) => `EUR ${value.toFixed(2)}`;
 
@@ -393,13 +29,44 @@ const normalizeModifiers = (modifiers: Record<string, string[]>) => {
 const modifiersSignature = (modifiers: Record<string, string[]>) =>
   JSON.stringify(normalizeModifiers(modifiers));
 
+const buildModifierGroups = (
+  item: MenuItem | null,
+  sauces: { name: string }[],
+  sides: { name: string }[]
+) => {
+  if (!item) return [];
+  const groups: MenuModifierGroup[] = [];
+  if (item.allow_sauces) {
+    groups.push({
+      id: "Sauce",
+      label: "Sauce",
+      type: "single",
+      options: ["No sauce", ...sauces.map((sauce) => sauce.name)],
+    });
+  }
+  if (item.allow_sides) {
+    groups.push({
+      id: "Side",
+      label: "Side",
+      type: "single",
+      options: ["No side", ...sides.map((side) => side.name)],
+    });
+  }
+  return groups;
+};
+
 const Cashier = () => {
-  const { orders, addOrder, isLoading, error } = useOrders();
-  const categories = useMemo(
-    () => Array.from(new Set(MENU_ITEMS.map((item) => item.category))),
-    []
-  );
-  const [activeCategory, setActiveCategory] = useState(categories[0] ?? "Menu");
+  const { orders, addOrder, isLoading: ordersLoading, error: ordersError } = useOrders();
+  const {
+    categories,
+    items,
+    sauces,
+    sides,
+    isLoading: menuLoading,
+    error: menuError,
+  } = useMenu();
+
+  const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [table, setTable] = useState("");
   const [notes, setNotes] = useState("");
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -408,16 +75,26 @@ const Cashier = () => {
   const [selectedQty, setSelectedQty] = useState(1);
   const [feedback, setFeedback] = useState<string | null>(null);
 
-  const itemsForCategory = useMemo(
-    () => MENU_ITEMS.filter((item) => item.category === activeCategory),
-    [activeCategory]
+  const detailGroups = useMemo(
+    () => buildModifierGroups(selectedItem, sauces, sides),
+    [selectedItem, sauces, sides]
   );
 
+  const itemsForCategory = useMemo(() => {
+    if (!activeCategoryId) return [];
+    return items.filter((item) => item.category_id === activeCategoryId);
+  }, [items, activeCategoryId]);
+
   const cartTotal = useMemo(
-    () =>
-      cartItems.reduce((sum, item) => sum + item.quantity * item.menuItem.price, 0),
+    () => cartItems.reduce((sum, item) => sum + item.quantity * item.menuItem.price, 0),
     [cartItems]
   );
+
+  useEffect(() => {
+    if (!activeCategoryId && categories.length > 0) {
+      setActiveCategoryId(categories[0].id);
+    }
+  }, [activeCategoryId, categories]);
 
   const resetDetailPanel = () => {
     setSelectedItem(null);
@@ -426,15 +103,16 @@ const Cashier = () => {
   };
 
   const openDetailPanel = (item: MenuItem) => {
-    setSelectedItem(item);
+    const groups = buildModifierGroups(item, sauces, sides);
     const defaults: Record<string, string[]> = {};
-    item.modifiers?.forEach((group) => {
+    groups.forEach((group) => {
       if (group.type === "single") {
         defaults[group.label] = [group.options[0]];
       } else {
         defaults[group.label] = [];
       }
     });
+    setSelectedItem(item);
     setSelectedModifiers(defaults);
     setSelectedQty(1);
   };
@@ -539,57 +217,78 @@ const Cashier = () => {
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-contrast/75">
             Tap a card to customize sauces and sides, then send the order straight to the kitchen.
+            The menu and orders stay synced through Supabase.
           </p>
         </div>
         <div className="rounded-2xl border border-accent-3/60 bg-accent-2/70 px-4 py-3 text-sm text-contrast/70 shadow-sm">
-          {isLoading ? "Syncing orders..." : `${orders.length} active orders`}
+          {ordersLoading || menuLoading ? "Syncing..." : `${orders.length} active orders`}
         </div>
       </header>
+
+      {menuError ? (
+        <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">
+          {menuError}
+        </div>
+      ) : null}
 
       <div className="grid gap-8 lg:grid-cols-[1.3fr_0.7fr]">
         <section className="space-y-6">
           <div className="flex flex-wrap gap-3">
-            {categories.map((category) => (
-              <button
-                key={category}
-                type="button"
-                onClick={() => setActiveCategory(category)}
-                className={`rounded-full border px-4 py-2 text-sm font-semibold uppercase tracking-wide transition ${
-                  activeCategory === category
-                    ? "border-brand/50 bg-brand/15 text-brand"
-                    : "border-accent-3/60 text-contrast/70 hover:border-brand/40 hover:text-brand"
-                }`}
-              >
-                {category}
-              </button>
-            ))}
+            {categories.length === 0 ? (
+              <span className="text-sm text-contrast/60">
+                No menu categories yet. Add them in Admin.
+              </span>
+            ) : (
+              categories.map((category) => (
+                <button
+                  key={category.id}
+                  type="button"
+                  onClick={() => setActiveCategoryId(category.id)}
+                  className={`rounded-full border px-4 py-2 text-sm font-semibold uppercase tracking-wide transition ${
+                    activeCategoryId === category.id
+                      ? "border-brand/50 bg-brand/15 text-brand"
+                      : "border-accent-3/60 text-contrast/70 hover:border-brand/40 hover:text-brand"
+                  }`}
+                >
+                  {category.name}
+                </button>
+              ))
+            )}
           </div>
 
           <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-            {itemsForCategory.map((item) => (
-              <button
-                key={item.id}
-                type="button"
-                onClick={() => openDetailPanel(item)}
-                className="group rounded-3xl border border-accent-3/60 bg-accent-1/80 p-5 text-left shadow-lg shadow-accent-4/20 transition hover:-translate-y-1 hover:border-brand/50"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div>
-                    <h3 className="text-lg font-semibold text-contrast">{item.name}</h3>
-                    {item.description ? (
-                      <p className="mt-1 text-xs text-contrast/70">{item.description}</p>
-                    ) : null}
+            {itemsForCategory.length === 0 ? (
+              <div className="rounded-3xl border border-dashed border-accent-3/60 bg-accent-1/80 p-6 text-sm text-contrast/60">
+                No items in this category yet.
+              </div>
+            ) : (
+              itemsForCategory.map((item) => (
+                <button
+                  key={item.id}
+                  type="button"
+                  onClick={() => openDetailPanel(item)}
+                  className="group rounded-3xl border border-accent-3/60 bg-accent-1/80 p-5 text-left shadow-lg shadow-accent-4/20 transition hover:-translate-y-1 hover:border-brand/50"
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div>
+                      <h3 className="text-lg font-semibold text-contrast">{item.name}</h3>
+                      {item.description ? (
+                        <p className="mt-1 text-xs text-contrast/70">{item.description}</p>
+                      ) : null}
+                    </div>
+                    <span className="rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">
+                      {formatCurrency(item.price)}
+                    </span>
                   </div>
-                  <span className="rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">
-                    {formatCurrency(item.price)}
-                  </span>
-                </div>
-                <div className="mt-4 flex items-center justify-between text-xs text-contrast/60">
-                  <span>{item.modifiers?.length ? "Customize" : "Quick add"}</span>
-                  <span className="text-brand/70 transition group-hover:text-brand">Tap to add</span>
-                </div>
-              </button>
-            ))}
+                  <div className="mt-4 flex items-center justify-between text-xs text-contrast/60">
+                    <span>
+                      {item.allow_sauces || item.allow_sides ? "Customize" : "Quick add"}
+                    </span>
+                    <span className="text-brand/70 transition group-hover:text-brand">Tap to add</span>
+                  </div>
+                </button>
+              ))
+            )}
           </div>
         </section>
 
@@ -697,7 +396,7 @@ const Cashier = () => {
           </div>
 
           {feedback ? <p className="text-sm text-contrast/70">{feedback}</p> : null}
-          {error ? <p className="text-sm text-rose-300">{error}</p> : null}
+          {ordersError ? <p className="text-sm text-rose-300">{ordersError}</p> : null}
 
           <div className="flex flex-col gap-3">
             <button
@@ -747,9 +446,9 @@ const Cashier = () => {
               </span>
             </div>
 
-            {selectedItem.modifiers?.length ? (
+            {detailGroups.length ? (
               <div className="mt-6 space-y-5">
-                {selectedItem.modifiers.map((group) => (
+                {detailGroups.map((group) => (
                   <div key={group.id} className="space-y-3">
                     <div className="flex items-center justify-between">
                       <h3 className="text-sm font-semibold text-contrast">{group.label}</h3>
