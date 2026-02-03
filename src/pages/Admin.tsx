@@ -7,6 +7,38 @@ type ModalState =
   | { mode: "edit-list"; type: "category" | "sauce" | "side" }
   | { mode: "edit-item"; id: string }
   | null;
+const ICON_CHOICES = [
+  "ph:fork-knife",
+  "ph:hamburger",
+  "ph:pizza",
+  "ph:hot-dog",
+  "ph:sandwich",
+  "ph:ice-cream",
+  "ph:coffee",
+  "ph:beer-stein",
+  "ph:martini",
+  "ph:wine",
+  "ph:fish",
+  "ph:shrimp",
+  "ph:egg",
+  "ph:bread",
+  "ph:cheese",
+  "ph:carrot",
+  "ph:leaf",
+  "ph:pepper",
+  "ph:fork",
+  "ph:knife",
+  "ph:spoon",
+  "mdi:french-fries",
+  "mdi:kebab",
+  "mdi:silverware-fork-knife",
+  "mdi:ice-cream",
+  "mdi:cake-variant",
+  "mdi:donut",
+  "mdi:food-drumstick",
+  "mdi:food-steak",
+  "mdi:pot-steam",
+];
 const Admin = () => {
   const {
     categories,
@@ -31,6 +63,7 @@ const Admin = () => {
   const [itemPrice, setItemPrice] = useState("");
   const [itemRegisterCode, setItemRegisterCode] = useState("");
   const [itemIconName, setItemIconName] = useState("");
+  const [isIconModalOpen, setIsIconModalOpen] = useState(false);
   const [itemCategoryId, setItemCategoryId] = useState("");
   const [itemDescription, setItemDescription] = useState("");
   const [itemAllowSauces, setItemAllowSauces] = useState(true);
@@ -86,6 +119,7 @@ const Admin = () => {
     setItemPrice("");
     setItemRegisterCode("");
     setItemIconName("");
+    setIsIconModalOpen(false);
     setItemDescription("");
     setItemAllowSauces(true);
     setItemAllowSides(false);
@@ -103,6 +137,7 @@ const Admin = () => {
     setItemPrice(match ? match.price.toFixed(2) : "");
     setItemRegisterCode(match?.register_code ?? "");
     setItemIconName(match?.icon_name ?? "");
+    setIsIconModalOpen(false);
     setItemCategoryId(match?.category_id ?? categories[0]?.id ?? "");
     setItemDescription(match?.description ?? "");
     setItemAllowSauces(match?.allow_sauces ?? true);
@@ -421,21 +456,24 @@ const Admin = () => {
                       className="w-full rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast outline-none transition focus:border-brand/60"
                       placeholder="Register code"
                     />
-                    <div className="space-y-2">
-                      <div className="flex items-center gap-3 rounded-2xl border border-accent-3/60 bg-primary/70 px-3 py-2">
+                    <div className="space-y-3">
+                      <button
+                        type="button"
+                        onClick={() => setIsIconModalOpen(true)}
+                        className="flex w-full items-center gap-3 rounded-2xl border border-accent-3/60 bg-primary/70 px-3 py-2 text-left text-sm text-contrast transition hover:border-brand/50"
+                      >
                         <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-accent-3/60 bg-primary/60">
-                          <Icon icon={itemIconName.trim() || "ph:fork-knife"} className="h-5 w-5 text-brand" />
+                          <Icon icon={itemIconName || "ph:fork-knife"} className="h-5 w-5 text-brand" />
                         </div>
-                        <input
-                          value={itemIconName}
-                          onChange={(event) => setItemIconName(event.target.value)}
-                          className="flex-1 bg-transparent px-1 py-2 text-sm text-contrast outline-none"
-                          placeholder="ph:hamburger"
-                        />
-                      </div>
-                      <p className="text-[11px] text-contrast/60">
-                        Icon name (Phosphor, e.g. ph:hamburger).
-                      </p>
+                        <div>
+                          <p className="text-xs font-semibold uppercase tracking-wide text-contrast/70">
+                            {itemIconName ? "Selected icon" : "No icon selected"}
+                          </p>
+                          <p className="text-xs text-contrast/60">
+                            {itemIconName || "Click to choose"}
+                          </p>
+                        </div>
+                      </button>
                     </div>
                     <select
                       value={itemCategoryId}
@@ -515,6 +553,56 @@ const Admin = () => {
               ) : null}
             </div>
           </div>
+          {isIconModalOpen ? (
+            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-primary/70 backdrop-blur p-4">
+              <button
+                type="button"
+                aria-label="Close icon picker"
+                className="absolute inset-0"
+                onClick={() => setIsIconModalOpen(false)}
+              />
+              <div className="relative z-10 w-full max-w-3xl rounded-3xl border border-accent-3/60 bg-primary p-6 shadow-2xl">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
+                      Icon picker
+                    </p>
+                    <h3 className="text-xl font-semibold text-contrast">Choose an icon</h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsIconModalOpen(false)}
+                    className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                  >
+                    Close
+                  </button>
+                </div>
+                <div className="mt-5 grid grid-cols-5 gap-3 sm:grid-cols-6 md:grid-cols-8">
+                  {ICON_CHOICES.map((icon) => {
+                    const selected = itemIconName === icon;
+                    return (
+                      <button
+                        key={icon}
+                        type="button"
+                        onClick={() => {
+                          setItemIconName(icon);
+                          setIsIconModalOpen(false);
+                        }}
+                        aria-pressed={selected}
+                        className={`flex h-12 w-12 items-center justify-center rounded-2xl border transition ${
+                          selected
+                            ? "border-brand/60 bg-brand/15 text-brand"
+                            : "border-accent-3/60 bg-primary/70 text-contrast/70 hover:border-brand/40 hover:text-brand"
+                        }`}
+                      >
+                        <Icon icon={icon} className="h-6 w-6" />
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+          ) : null}
         </div>
       ) : null}
     </section>
