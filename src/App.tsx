@@ -1,3 +1,4 @@
+import { useMemo } from "react";
 import Navbar from "./components/Navbar";
 import VirtualKeyboard from "./components/VirtualKeyboard";
 import PinGate from "./features/pin/PinGate";
@@ -5,8 +6,13 @@ import { OrdersProvider } from "./features/orders/OrdersContext";
 import { MenuProvider } from "./features/menu/MenuContext";
 import { SessionsProvider } from "./features/sessions/SessionsContext";
 import AppRoutes from "./routes/AppRoutes";
+import { Bounce, ToastContainer } from "react-toastify";
+import useDocumentTheme from "./hooks/useDocumentTheme";
 
 function App() {
+  const isDark = useDocumentTheme();
+  const toastTheme = useMemo(() => (isDark ? "dark" : "light"), [isDark]);
+
   return (
     <PinGate>
       <OrdersProvider>
@@ -19,6 +25,19 @@ function App() {
               </main>
               <VirtualKeyboard />
             </div>
+            <ToastContainer
+              position="top-center"
+              autoClose={1000}
+              hideProgressBar={false}
+              newestOnTop={false}
+              closeOnClick={false}
+              rtl={false}
+              pauseOnFocusLoss
+              draggable
+              pauseOnHover
+              theme={toastTheme}
+              transition={Bounce}
+            />
           </SessionsProvider>
         </MenuProvider>
       </OrdersProvider>

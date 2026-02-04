@@ -4,6 +4,7 @@ import { useOrders } from "../features/orders/OrdersContext";
 import { useMenu } from "../features/menu/MenuContext";
 import { useSessions } from "../features/sessions/SessionsContext";
 import type { MenuItem } from "../features/menu/MenuContext";
+import { toast } from "react-toastify";
 
 type MenuModifierGroup = {
   id: string;
@@ -104,9 +105,10 @@ const Cashier = () => {
     error: menuError,
   } = useMenu();
   const { sessions, createSession, closeSession } = useSessions();
+  const takeawayLabel = "Takeaway";
 
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
-  const [table, setTable] = useState("");
+  const [table, setTable] = useState(takeawayLabel);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [billTable, setBillTable] = useState<string | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -115,7 +117,13 @@ const Cashier = () => {
   const [selectedQty, setSelectedQty] = useState(1);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [orderStep, setOrderStep] = useState<1 | 2 | 3>(1);
-  const takeawayLabel = "Takeaway";
+  const resolvedTable = table.trim() || takeawayLabel;
+  const billInputValue = table === takeawayLabel ? "" : table;
+
+  const notify = (message: string, tone: "info" | "success" | "error" = "info") => {
+    setFeedback(message);
+    toast(message, { type: tone });
+  };
 
   const detailGroups = useMemo(
     () => buildModifierGroups(selectedItem, sauces, sides),
@@ -208,13 +216,9 @@ const Cashier = () => {
   }, [openSessions]);
 
   useEffect(() => {
-    if (!table) {
-      setActiveSessionId(null);
-      return;
-    }
-    const existing = sessionByTable.get(table);
+    const existing = sessionByTable.get(resolvedTable);
     setActiveSessionId(existing?.id ?? null);
-  }, [table, sessionByTable]);
+  }, [resolvedTable, sessionByTable]);
 
   useEffect(() => {
     if (!activeCategoryId && categories.length > 0) {
@@ -300,21 +304,18 @@ const Cashier = () => {
   };
 
   const handleSubmit = async () => {
-    if (!table.trim()) {
-      setFeedback("Enter a bill name to create the order.");
-      return;
-    }
     if (cartItems.length === 0) {
-      setFeedback("Select at least one menu item before submitting.");
+      notify("Select at least one menu item before submitting.", "error");
       return;
     }
 
-    const isTakeaway = table === takeawayLabel;
+    const tableName = resolvedTable;
+    const isTakeaway = tableName === takeawayLabel;
     let sessionId = activeSessionId;
     if (!sessionId) {
-      const created = await createSession(table);
+      const created = await createSession(tableName);
       if (!created.ok || !created.session) {
-        setFeedback(created.error ?? "Unable to open a session.");
+        notify(created.error ?? "Unable to open a session.", "error");
         return;
       }
       sessionId = created.session.id;
@@ -322,7 +323,7 @@ const Cashier = () => {
     }
 
     const result = await addOrder({
-      table,
+      table: tableName,
       sessionId,
       items: cartItems.map((item) => ({
         name: item.menuItem.name,
@@ -335,7 +336,7 @@ const Cashier = () => {
     });
 
     if (!result.ok) {
-      setFeedback(result.error ?? "Unable to send order right now.");
+      notify(result.error ?? "Unable to send order right now.", "error");
       return;
     }
 
@@ -347,15 +348,16 @@ const Cashier = () => {
       }
     }
 
-    setTable("");
+    setTable(takeawayLabel);
     setCartItems([]);
-    setFeedback(
-      closeError
-        ? `Order sent, but ${closeError}`
-        : isTakeaway
-          ? "Order sent and takeaway bill closed."
-          : "Order sent to the kitchen."
-    );
+    if (closeError) {
+      notify(`Order sent, but ${closeError}`, "error");
+    } else {
+      notify(
+        isTakeaway ? "Order sent and takeaway bill closed." : "Order sent to the kitchen.",
+        "success"
+      );
+    }
     setOrderStep(1);
     setActiveSessionId(null);
   };
@@ -365,7 +367,7 @@ const Cashier = () => {
       return { ok: true, skipped: true };
     }
     const result = await addOrder({
-      table,
+      table: resolvedTable,
       sessionId,
       items: cartItems.map((item) => ({
         name: item.menuItem.name,
@@ -507,54 +509,27 @@ const Cashier = () => {
             <div className="space-y-4">
               <div>
                 <label className="text-sm font-semibold text-contrast/80" htmlFor="table">
-                  Bill name
+                  Bill name (optional)
                 </label>
                 <input
                   id="table"
-                  value={table}
-                  onChange={(event) => setTable(event.target.value)}
-                  className="mt-3 w-full rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast outline-none transition focus:border-brand/60"
-                  placeholder="e.g. Window 1, Marek, Takeaway #23"
-                />
-                <div className="mt-3 flex flex-wrap gap-2">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      if (table === takeawayLabel) {
-                        setTable("");
-                        return;
-                      }
-                      if (tableGroupMap.has(takeawayLabel)) {
-                        setBillTable(takeawayLabel);
-                        return;
-                      }
+                  value={billInputValue}
+                  onChange={(event) => {
+                    const nextValue = event.target.value;
+                    if (nextValue.trim()) {
+                      setTable(nextValue);
+                    } else {
                       setTable(takeawayLabel);
-                    }}
-                    className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
-                      table === takeawayLabel
-                        ? "border-brand/60 bg-brand text-white shadow-md shadow-brand/40"
-                        : tableGroupMap.has(takeawayLabel)
-                          ? "border-emerald-400/50 bg-emerald-500/15 text-emerald-100 hover:border-brand/50 hover:text-brand"
-                          : "border-accent-3/60 bg-primary/70 text-contrast/70 hover:border-brand/50 hover:text-brand"
-                    }`}
-                  >
-                    {takeawayLabel}
-                  </button>
-                </div>
+                    }
+                  }}
+                  className="mt-3 w-full rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast outline-none transition focus:border-brand/60"
+                  placeholder="e.g. Window 1, Marek"
+                />
                 <p className="mt-2 text-xs text-contrast/60">
-                  {table ? "Tap the selected bill to clear." : "Enter a bill name or choose takeaway."}
+                  Leave empty for takeaway. Enter a name to open a bill.
                 </p>
               </div>
-
-              <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast/70">
-                <div className="flex items-center justify-between">
-                  <span>Bill</span>
-                  <span className="text-base font-semibold text-contrast">
-                    {table || "Not named"}
-                  </span>
-                </div>
-              </div>
-              {activeSessionId ? (
+              {activeSessionId && billInputValue.trim() ? (
                 <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-100">
                   Open bill active
                 </div>
@@ -696,7 +671,7 @@ const Cashier = () => {
                   type="button"
                   onClick={() => {
                     if (cartItems.length === 0 && existingItems.length === 0) {
-                      setFeedback("Add at least one item to continue.");
+                      notify("Add at least one item to continue.", "error");
                       return;
                     }
                     setFeedback(null);
@@ -722,19 +697,17 @@ const Cashier = () => {
                     onClick={async () => {
                       const sendResult = await sendPendingItems(activeSessionId);
                       if (!sendResult.ok) {
-                        setFeedback(sendResult.error ?? "Unable to send items.");
+                        notify(sendResult.error ?? "Unable to send items.", "error");
                         return;
                       }
                       const closeResult = await closeSession(activeSessionId);
                       if (!closeResult.ok) {
-                        setFeedback(closeResult.error ?? "Unable to close bill.");
+                        notify(closeResult.error ?? "Unable to close bill.", "error");
                         return;
                       }
-                      setTable("");
+                      setTable(takeawayLabel);
                       setCartItems([]);
-                      setFeedback(
-                        sendResult.skipped ? "Bill closed." : "Order sent and bill closed."
-                      );
+                      notify(sendResult.skipped ? "Bill closed." : "Order sent and bill closed.", "success");
                       setOrderStep(1);
                       setActiveSessionId(null);
                     }}
@@ -755,7 +728,7 @@ const Cashier = () => {
             <button
               type="button"
               onClick={() => {
-                setTable("");
+                setTable(takeawayLabel);
                 setCartItems([]);
                 setFeedback(null);
                 setOrderStep(1);
@@ -907,7 +880,7 @@ const Cashier = () => {
                   onClick={async () => {
                     const result = await closeSession(billGroup.sessionId);
                     if (!result.ok) {
-                      setFeedback(result.error ?? "Unable to close bill.");
+                      notify(result.error ?? "Unable to close bill.", "error");
                       return;
                     }
                     setBillTable(null);
