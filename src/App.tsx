@@ -1,4 +1,5 @@
 import Navbar from "./components/Navbar";
+import VirtualKeyboard from "./components/VirtualKeyboard";
 import { OrdersProvider } from "./features/orders/OrdersContext";
 import { MenuProvider } from "./features/menu/MenuContext";
 import { SessionsProvider } from "./features/sessions/SessionsContext";
@@ -14,6 +15,7 @@ function App() {
             <main className="w-full px-4 py-12">
               <AppRoutes />
             </main>
+            <VirtualKeyboard />
           </div>
         </SessionsProvider>
       </MenuProvider>

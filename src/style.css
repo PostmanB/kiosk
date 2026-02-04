@@ -34,3 +34,11 @@
   width: 0;
   height: 0;
 }
+
+button,
+[role="button"] {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-user-select: none;
+  user-select: none;
+  touch-action: manipulation;
+}
