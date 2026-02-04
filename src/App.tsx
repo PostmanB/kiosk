@@ -1,5 +1,6 @@
 import Navbar from "./components/Navbar";
 import VirtualKeyboard from "./components/VirtualKeyboard";
+import PinGate from "./features/pin/PinGate";
 import { OrdersProvider } from "./features/orders/OrdersContext";
 import { MenuProvider } from "./features/menu/MenuContext";
 import { SessionsProvider } from "./features/sessions/SessionsContext";
@@ -7,19 +8,21 @@ import AppRoutes from "./routes/AppRoutes";
 
 function App() {
   return (
-    <OrdersProvider>
-      <MenuProvider>
-        <SessionsProvider>
-          <div className="min-h-screen bg-primary text-contrast transition-colors duration-300">
-            <Navbar />
-            <main className="w-full px-4 py-12">
-              <AppRoutes />
-            </main>
-            <VirtualKeyboard />
-          </div>
-        </SessionsProvider>
-      </MenuProvider>
-    </OrdersProvider>
+    <PinGate>
+      <OrdersProvider>
+        <MenuProvider>
+          <SessionsProvider>
+            <div className="min-h-screen bg-primary text-contrast transition-colors duration-300">
+              <Navbar />
+              <main className="w-full px-4 py-12">
+                <AppRoutes />
+              </main>
+              <VirtualKeyboard />
+            </div>
+          </SessionsProvider>
+        </MenuProvider>
+      </OrdersProvider>
+    </PinGate>
   );
 }
 

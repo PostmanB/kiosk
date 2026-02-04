@@ -6,11 +6,11 @@
 
   --color-brand: 211 39 82; /* #d32752 */
   --color-primary: 248 250 252; /* #f8fafc */
-  --color-accent-1: 249 250 251; /* #f9fafb */
-  --color-accent-2: 241 245 249; /* #f1f5f9 */
-  --color-accent-3: 226 232 240; /* #e2e8f0 */
-  --color-accent-4: 209 213 219; /* #d1d5db */
-  --color-contrast: 71 85 105; /* #475569 */
+  --color-accent-1: 241 245 249; /* #f1f5f9 */
+  --color-accent-2: 226 232 240; /* #e2e8f0 */
+  --color-accent-3: 203 213 225; /* #cbd5e1 */
+  --color-accent-4: 148 163 184; /* #94a3b8 */
+  --color-contrast: 51 65 85; /* #334155 */
 }
 
 .dark {

@@ -1,4 +1,4 @@
-﻿import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useOrders } from "../features/orders/OrdersContext";
 import { useSessions } from "../features/sessions/SessionsContext";
 
@@ -45,6 +45,7 @@ const Bills = () => {
   const { orders, isLoading, error } = useOrders();
   const { sessions, closeSession } = useSessions();
   const [selectedBill, setSelectedBill] = useState<string | null>(null);
+  const [confirmClose, setConfirmClose] = useState(false);
 
   const billGroups = useMemo(() => {
     const openSessions = sessions.filter((session) => session.status === "open");
@@ -89,6 +90,10 @@ const Bills = () => {
       }))
     );
   }, [selectedGroup]);
+
+  useEffect(() => {
+    setConfirmClose(false);
+  }, [selectedGroup?.sessionId]);
 
   return (
     <section className="space-y-10">
@@ -201,30 +206,17 @@ const Bills = () => {
                 </h2>
                 <p className="mt-1 text-xs text-contrast/60">
                   {selectedGroup.ordersCount} order
-                  {selectedGroup.ordersCount === 1 ? "" : "s"} ? Opened {" "}
+                  {selectedGroup.ordersCount === 1 ? "" : "s"} ? Opened{" "}
                   {formatTime(selectedGroup.openedAt)}
                 </p>
               </div>
-              <div className="flex items-center gap-2">
-                <button
-                  type="button"
-                  onClick={async () => {
-                    if (!selectedGroup?.sessionId) return;
-                    await closeSession(selectedGroup.sessionId);
-                    setSelectedBill(null);
-                  }}
-                  className="rounded-full border border-amber-400/40 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300 hover:text-amber-50"
-                >
-                  Close bill
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setSelectedBill(null)}
-                  className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
-                >
-                  Close
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => setSelectedBill(null)}
+                className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+              >
+                Close
+              </button>
             </div>
 
             <div className="mt-6 grid flex-1 min-h-0 gap-6 overflow-hidden lg:grid-cols-[1.2fr_0.8fr]">
@@ -299,6 +291,46 @@ const Bills = () => {
                   )}
                 </div>
               </aside>
+            </div>
+
+            <div className="mt-6 flex flex-col gap-3 border-t border-accent-3/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
+              <div className="text-sm text-contrast/70">
+                <p className="font-semibold text-contrast">Ready to close this bill?</p>
+                <p className="text-xs text-contrast/60">
+                  This will mark the bill as closed and remove it from open bills.
+                </p>
+              </div>
+              <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                <button
+                  type="button"
+                  onClick={() => setSelectedBill(null)}
+                  className="rounded-full border border-accent-3/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                >
+                  Keep open
+                </button>
+                {confirmClose ? (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      if (!selectedGroup?.sessionId) return;
+                      await closeSession(selectedGroup.sessionId);
+                      setConfirmClose(false);
+                      setSelectedBill(null);
+                    }}
+                    className="rounded-full bg-amber-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-md shadow-amber-500/30 transition hover:-translate-y-0.5 hover:shadow-lg"
+                  >
+                    Confirm close
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => setConfirmClose(true)}
+                    className="rounded-full border border-amber-500/70 bg-amber-200/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-900 transition hover:border-amber-600/70 hover:text-amber-900 dark:border-amber-400/60 dark:bg-amber-400/15 dark:text-amber-100 dark:hover:border-amber-300 dark:hover:text-amber-50"
+                  >
+                    Close bill
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>

@@ -1,7 +1,8 @@
 import { useState } from "react";
 import { Link, NavLink } from "react-router-dom";
-import { FiMenu, FiX } from "react-icons/fi";
+import { FiLock, FiMenu, FiX } from "react-icons/fi";
 import ThemeToggle from "./ui/ThemeToggle";
+import { PIN_UNLOCK_KEY } from "../features/pin/PinGate";
 
 const navLinks = [
   { to: "/cashier", label: "Cashier" },
@@ -12,6 +13,10 @@ const navLinks = [
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const handleLock = () => {
+    localStorage.removeItem(PIN_UNLOCK_KEY);
+    window.location.reload();
+  };
 
   const desktopLinkClass = ({ isActive }: { isActive: boolean }) =>
     [
@@ -53,12 +58,14 @@ const Navbar = () => {
           </div>
           <div className="flex items-center gap-3">
             <ThemeToggle />
-            <Link
-              to="/cashier"
-              className="hidden rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow transition-transform hover:-translate-y-0.5 hover:shadow-md sm:inline-flex"
+            <button
+              type="button"
+              onClick={handleLock}
+              className="hidden items-center gap-2 rounded-full border border-accent-3/60 bg-accent-2/70 px-4 py-2 text-sm font-semibold text-contrast shadow transition-transform hover:-translate-y-0.5 hover:border-brand/50 hover:text-brand hover:shadow-md sm:inline-flex"
             >
-              New Order
-            </Link>
+              <FiLock className="h-4 w-4" />
+              Lock
+            </button>
             <button
               type="button"
               className="inline-flex items-center justify-center rounded-md p-2 text-contrast/70 transition hover:bg-accent-2 hover:text-brand focus:outline-none focus:ring-2 focus:ring-brand sm:hidden"
@@ -105,13 +112,17 @@ const Navbar = () => {
                 </NavLink>
               ))}
               <ThemeToggle variant="menu" />
-              <Link
-                to="/cashier"
-                className="mt-auto rounded-full bg-brand px-4 py-2 text-sm font-semibold text-white shadow transition-transform hover:-translate-y-0.5 hover:shadow-md"
-                onClick={() => setIsMenuOpen(false)}
+              <button
+                type="button"
+                className="mt-auto flex items-center justify-center gap-2 rounded-full border border-accent-3/60 bg-accent-2/70 px-4 py-2 text-sm font-semibold text-contrast shadow transition-transform hover:-translate-y-0.5 hover:border-brand/50 hover:text-brand hover:shadow-md"
+                onClick={() => {
+                  setIsMenuOpen(false);
+                  handleLock();
+                }}
               >
-                New Order
-              </Link>
+                <FiLock className="h-4 w-4" />
+                Lock
+              </button>
             </nav>
           </div>
         </div>
