@@ -115,21 +115,6 @@ const Cashier = () => {
   const [selectedQty, setSelectedQty] = useState(1);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [orderStep, setOrderStep] = useState<1 | 2 | 3>(1);
-  const tableLayout = useMemo(
-    () => [
-      { id: "1", x: 44, y: 4, w: 12, h: 20 },
-      { id: "2", x: 6, y: 30, w: 12, h: 12 },
-      { id: "3", x: 22, y: 28, w: 24, h: 14 },
-      { id: "4", x: 6, y: 48, w: 12, h: 12 },
-      { id: "5", x: 22, y: 48, w: 24, h: 14 },
-      { id: "6", x: 58, y: 28, w: 26, h: 10 },
-      { id: "7", x: 58, y: 40, w: 26, h: 10 },
-      { id: "8", x: 58, y: 52, w: 26, h: 10 },
-      { id: "9", x: 64, y: 68, w: 18, h: 10 },
-      { id: "10", x: 64, y: 80, w: 18, h: 14 },
-    ],
-    []
-  );
   const takeawayLabel = "Takeaway";
 
   const detailGroups = useMemo(
@@ -316,7 +301,7 @@ const Cashier = () => {
 
   const handleSubmit = async () => {
     if (!table.trim()) {
-      setFeedback("Enter a table number to create the order.");
+      setFeedback("Enter a bill name to create the order.");
       return;
     }
     if (cartItems.length === 0) {
@@ -324,6 +309,7 @@ const Cashier = () => {
       return;
     }
 
+    const isTakeaway = table === takeawayLabel;
     let sessionId = activeSessionId;
     if (!sessionId) {
       const created = await createSession(table);
@@ -353,9 +339,23 @@ const Cashier = () => {
       return;
     }
 
+    let closeError: string | null = null;
+    if (isTakeaway && sessionId) {
+      const closeResult = await closeSession(sessionId);
+      if (!closeResult.ok) {
+        closeError = closeResult.error ?? "Unable to close takeaway bill.";
+      }
+    }
+
     setTable("");
     setCartItems([]);
-    setFeedback("Order sent to the kitchen.");
+    setFeedback(
+      closeError
+        ? `Order sent, but ${closeError}`
+        : isTakeaway
+          ? "Order sent and takeaway bill closed."
+          : "Order sent to the kitchen."
+    );
     setOrderStep(1);
     setActiveSessionId(null);
   };
@@ -386,16 +386,7 @@ const Cashier = () => {
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand/70">
             Cashier Console
           </p>
-          <h1 className="text-3xl font-bold text-contrast sm:text-4xl">
-            Build orders from the menu cards.
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-contrast/75">
-            Tap a card to customize sauces and sides, then send the order straight to the kitchen.
-            The menu and orders stay synced through Supabase.
-          </p>
-        </div>
-        <div className="rounded-2xl border border-accent-3/60 bg-accent-2/70 px-4 py-3 text-sm text-contrast/70 shadow-sm">
-          {ordersLoading || menuLoading ? "Syncing..." : `${orders.length} active orders`}
+          <h1 className="text-3xl font-bold text-contrast sm:text-4xl">Cashier</h1>
         </div>
       </header>
 
@@ -406,14 +397,13 @@ const Cashier = () => {
       ) : null}
 
       <div className="flex flex-wrap gap-3 rounded-3xl border border-accent-3/60 bg-accent-1/70 p-4 text-xs font-semibold uppercase tracking-[0.2em] text-contrast/70">
-        <span className={orderStep === 1 ? "text-brand" : ""}>1. Table</span>
-        <span className={orderStep === 2 ? "text-brand" : ""}>2. Items</span>
-        <span className={orderStep === 3 ? "text-brand" : ""}>3. Send</span>
+        <span className={orderStep === 1 ? "text-brand" : ""}>1. Items</span>
+        <span className={orderStep === 2 ? "text-brand" : ""}>2. Bill & Send</span>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-[1.3fr_0.7fr]">
         <section className="space-y-6">
-          {orderStep === 2 ? (
+          {orderStep === 1 ? (
             <>
               <div className="flex flex-wrap gap-3">
                 {categories.length === 0 ? (
@@ -485,88 +475,47 @@ const Cashier = () => {
             </>
           ) : (
             <div className="rounded-3xl border border-accent-3/60 bg-accent-1/80 p-8 text-sm text-contrast/70">
-              {orderStep === 1 ? (
-                <>
-                  <h2 className="text-xl font-semibold text-contrast">Step 1: Choose table</h2>
-                  <p className="mt-2">
-                    Select a table number or takeaway to start a new order.
-                  </p>
-                </>
-              ) : (
-                <>
-                  <h2 className="text-xl font-semibold text-contrast">Step 3: Review & send</h2>
-                  <p className="mt-2">
-                    Review the register codes and total quantities before sending.
-                  </p>
-                  <div className="mt-6 space-y-3">
-                    {reviewLines.length === 0 ? (
-                      <p className="text-sm text-contrast/60">No items in the order.</p>
-                    ) : (
-                      reviewLines.map((line) => (
-                        <div
-                          key={`${line.name}-${line.registerCode ?? "none"}`}
-                          className="flex items-center justify-between rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast"
-                        >
-                          <div>
-                            <p className="font-semibold">{line.quantity}x {line.name}</p>
-                            <p className="text-xs text-contrast/60">
-                              Code {line.registerCode ?? "—"}
-                            </p>
-                          </div>
-                        </div>
-                      ))
-                    )}
-                  </div>
-                </>
-              )}
+              <h2 className="text-xl font-semibold text-contrast">Review order</h2>
+              <p className="mt-2">
+                Check totals and register codes before sending.
+              </p>
+              <div className="mt-6 space-y-3">
+                {reviewLines.length === 0 ? (
+                  <p className="text-sm text-contrast/60">No items in the order.</p>
+                ) : (
+                  reviewLines.map((line) => (
+                    <div
+                      key={`${line.name}-${line.registerCode ?? "none"}`}
+                      className="flex items-center justify-between rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast"
+                    >
+                      <div>
+                        <p className="font-semibold">{line.quantity}x {line.name}</p>
+                        <p className="text-xs text-contrast/60">
+                          Code {line.registerCode ?? "—"}
+                        </p>
+                      </div>
+                    </div>
+                  ))
+                )}
+              </div>
             </div>
           )}
         </section>
 
         <aside className="space-y-6 rounded-3xl border border-accent-3/60 bg-accent-2/70 p-6 shadow-lg shadow-accent-4/20">
-          {orderStep === 1 ? (
+          {orderStep === 2 ? (
             <div className="space-y-4">
               <div>
                 <label className="text-sm font-semibold text-contrast/80" htmlFor="table">
-                  Table map
+                  Bill name
                 </label>
-                <div className="mt-4 rounded-3xl border border-accent-3/60 bg-primary/70 p-4">
-                  <div className="relative h-[300px] w-full max-w-md">
-                    {tableLayout.map((entry) => {
-                      const isSelected = table === entry.id;
-                      const hasBill = tableGroupMap.has(entry.id);
-                      return (
-                        <button
-                          key={entry.id}
-                          type="button"
-                          onClick={() => {
-                            if (hasBill && !isSelected) {
-                              setBillTable(entry.id);
-                              return;
-                            }
-                            setTable(isSelected ? "" : entry.id);
-                          }}
-                          className={`absolute flex items-center justify-center rounded-xl border text-sm font-semibold transition ${
-                            isSelected
-                              ? "border-brand/60 bg-brand text-white shadow-md shadow-brand/40"
-                              : hasBill
-                                ? "border-emerald-400/50 bg-emerald-500/15 text-emerald-100 hover:border-brand/50 hover:text-brand"
-                                : "border-accent-3/60 bg-primary/80 text-contrast/70 hover:border-brand/50 hover:text-brand"
-                          }`}
-                          style={{
-                            left: `${entry.x}%`,
-                            top: `${entry.y}%`,
-                            width: `${entry.w}%`,
-                            height: `${entry.h}%`,
-                          }}
-                          aria-pressed={isSelected}
-                        >
-                          {entry.id}
-                        </button>
-                      );
-                    })}
-                  </div>
-                </div>
+                <input
+                  id="table"
+                  value={table}
+                  onChange={(event) => setTable(event.target.value)}
+                  className="mt-3 w-full rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast outline-none transition focus:border-brand/60"
+                  placeholder="e.g. Window 1, Marek, Takeaway #23"
+                />
                 <div className="mt-3 flex flex-wrap gap-2">
                   <button
                     type="button"
@@ -593,42 +542,15 @@ const Cashier = () => {
                   </button>
                 </div>
                 <p className="mt-2 text-xs text-contrast/60">
-                  {table
-                    ? "Tap the selected table to deselect."
-                    : "Select a table. Green tables have open bills."}
+                  {table ? "Tap the selected bill to clear." : "Enter a bill name or choose takeaway."}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={async () => {
-                  if (!table.trim()) {
-                    setFeedback("Select a table or takeaway to continue.");
-                    return;
-                  }
-                  setFeedback(null);
-                  if (!activeSessionId) {
-                    const created = await createSession(table);
-                    if (!created.ok || !created.session) {
-                      setFeedback(created.error ?? "Unable to open a session.");
-                      return;
-                    }
-                    setActiveSessionId(created.session.id);
-                  }
-                  setOrderStep(2);
-                }}
-                className="w-full rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-60"
-                disabled={!table.trim()}
-              >
-                Continue to items
-              </button>
-            </div>
-          ) : (
-            <>
+
               <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast/70">
                 <div className="flex items-center justify-between">
-                  <span>Service</span>
+                  <span>Bill</span>
                   <span className="text-base font-semibold text-contrast">
-                    {table || "Not selected"}
+                    {table || "Not named"}
                   </span>
                 </div>
               </div>
@@ -638,217 +560,212 @@ const Cashier = () => {
                 </div>
               ) : null}
 
+              
+            </div>
+          ) : null}
+
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold uppercase tracking-wide text-contrast/80">
+                Current order
+              </h3>
+              <span className="text-xs text-contrast/60">{cartItems.length} items</span>
+            </div>
+            {existingItems.length > 0 ? (
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <h3 className="text-sm font-semibold uppercase tracking-wide text-contrast/80">
-                    Current order
-                  </h3>
-                  <span className="text-xs text-contrast/60">{cartItems.length} items</span>
-                </div>
+                <p className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
+                  Existing items
+                </p>
+                {existingItems.map((item, index) => {
+                  const modifierLines = Object.entries(item.modifiers ?? {})
+                    .filter(([, values]) => values.length > 0)
+                    .map(([group, values]) => `${group}: ${values.join(", ")}`);
+                  return (
+                    <div
+                      key={`existing-${index}`}
+                      className="rounded-2xl border border-accent-3/60 bg-accent-1/80 p-3 text-sm text-contrast"
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="font-semibold">
+                          {item.quantity} x {item.name}
+                        </span>
+                        {typeof item.price === "number" ? (
+                          <span className="text-[11px] text-contrast/60">
+                            {formatCurrency(item.price * item.quantity)}
+                          </span>
+                        ) : null}
+                      </div>
+                      {modifierLines.length ? (
+                        <div className="mt-1 text-[11px] text-contrast/60">
+                          {modifierLines.join(" | ")}
+                        </div>
+                      ) : null}
+                    </div>
+                  );
+                })}
+              </div>
+            ) : null}
+
+            {cartItems.length === 0 ? (
+              <p className="rounded-2xl border border-dashed border-accent-3/60 bg-primary/70 p-4 text-sm text-contrast/60">
+                Choose items from the menu cards to start the order.
+              </p>
+            ) : (
+              <div className="space-y-3">
                 {existingItems.length > 0 ? (
-                  <div className="space-y-3">
-                    <p className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
-                      Existing items
-                    </p>
-                    {existingItems.map((item, index) => {
-                      const modifierLines = Object.entries(item.modifiers ?? {})
-                        .filter(([, values]) => values.length > 0)
-                        .map(([group, values]) => `${group}: ${values.join(", ")}`);
-                      return (
-                        <div
-                          key={`existing-${index}`}
-                          className="rounded-2xl border border-accent-3/60 bg-accent-1/80 p-3 text-sm text-contrast"
-                        >
-                          <div className="flex items-center justify-between gap-3">
-                            <span className="font-semibold">
-                              {item.quantity} x {item.name}
-                            </span>
-                            {typeof item.price === "number" ? (
-                              <span className="text-[11px] text-contrast/60">
-                                {formatCurrency(item.price * item.quantity)}
-                              </span>
-                            ) : null}
-                          </div>
+                  <p className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
+                    New items
+                  </p>
+                ) : null}
+                {cartItems.map((item) => {
+                  const modifierLines = Object.entries(item.modifiers)
+                    .filter(([, values]) => values.length > 0)
+                    .map(([group, values]) => `${group}: ${values.join(", ")}`);
+                  return (
+                    <div
+                      key={item.id}
+                      className="rounded-2xl border border-accent-3/60 bg-primary/70 p-4 text-sm text-contrast"
+                    >
+                      <div className="flex items-start justify-between gap-3">
+                        <div>
+                          <p className="font-semibold">{item.menuItem.name}</p>
                           {modifierLines.length ? (
                             <div className="mt-1 text-[11px] text-contrast/60">
                               {modifierLines.join(" | ")}
                             </div>
                           ) : null}
                         </div>
-                      );
-                    })}
-                  </div>
-                ) : null}
-
-                {cartItems.length === 0 ? (
-                  <p className="rounded-2xl border border-dashed border-accent-3/60 bg-primary/70 p-4 text-sm text-contrast/60">
-                    Choose items from the menu cards to start the order.
-                  </p>
-                ) : (
-                  <div className="space-y-3">
-                    {existingItems.length > 0 ? (
-                      <p className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
-                        New items
-                      </p>
-                    ) : null}
-                    {cartItems.map((item) => {
-                      const modifierLines = Object.entries(item.modifiers)
-                        .filter(([, values]) => values.length > 0)
-                        .map(([group, values]) => `${group}: ${values.join(", ")}`);
-                      return (
-                        <div
-                          key={item.id}
-                          className="rounded-2xl border border-accent-3/60 bg-primary/70 p-4 text-sm text-contrast"
+                        <button
+                          type="button"
+                          onClick={() => removeCartItem(item.id)}
+                          className="text-[11px] font-semibold uppercase tracking-wide text-rose-300 transition hover:text-rose-200"
                         >
-                          <div className="flex items-start justify-between gap-3">
-                            <div>
-                              <p className="font-semibold">{item.menuItem.name}</p>
-                              {modifierLines.length ? (
-                                <div className="mt-1 text-[11px] text-contrast/60">
-                                  {modifierLines.join(" | ")}
-                                </div>
-                              ) : null}
-                            </div>
-                            <button
-                              type="button"
-                              onClick={() => removeCartItem(item.id)}
-                              className="text-[11px] font-semibold uppercase tracking-wide text-rose-300 transition hover:text-rose-200"
-                            >
-                              Remove
-                            </button>
-                          </div>
-                          <div className="mt-3 flex items-center justify-between text-xs text-contrast/70">
-                            <div className="flex items-center gap-2">
-                              <button
-                                type="button"
-                                onClick={() => updateCartQuantity(item.id, -1)}
-                                className="h-7 w-7 rounded-full border border-accent-3/60 text-base text-contrast/70 transition hover:border-brand/50 hover:text-brand"
-                              >
-                                -
-                              </button>
-                              <span className="min-w-[24px] text-center text-sm font-semibold">
-                                {item.quantity}
-                              </span>
-                              <button
-                                type="button"
-                                onClick={() => updateCartQuantity(item.id, 1)}
-                                className="h-7 w-7 rounded-full border border-accent-3/60 text-base text-contrast/70 transition hover:border-brand/50 hover:text-brand"
-                              >
-                                +
-                              </button>
-                            </div>
-                            <span>{formatCurrency(item.menuItem.price * item.quantity)}</span>
-                          </div>
+                          Remove
+                        </button>
+                      </div>
+                      <div className="mt-3 flex items-center justify-between text-xs text-contrast/70">
+                        <div className="flex items-center gap-2">
+                          <button
+                            type="button"
+                            onClick={() => updateCartQuantity(item.id, -1)}
+                            className="h-7 w-7 rounded-full border border-accent-3/60 text-base text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                          >
+                            -
+                          </button>
+                          <span className="min-w-[24px] text-center text-sm font-semibold">
+                            {item.quantity}
+                          </span>
+                          <button
+                            type="button"
+                            onClick={() => updateCartQuantity(item.id, 1)}
+                            className="h-7 w-7 rounded-full border border-accent-3/60 text-base text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                          >
+                            +
+                          </button>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
+                        <span>{formatCurrency(item.menuItem.price * item.quantity)}</span>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
+            )}
+          </div>
 
-              <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast/70">
-                <div className="flex items-center justify-between">
-                  <span>Total</span>
-                  <span className="text-base font-semibold text-contrast">
-                    {formatCurrency(combinedTotal)}
-                  </span>
-                </div>
-                {existingItems.length > 0 ? (
-                  <p className="mt-1 text-[11px] text-contrast/60">
-                    Includes {formatCurrency(existingTotal)} from existing items.
-                  </p>
-                ) : null}
-              </div>
+          <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast/70">
+            <div className="flex items-center justify-between">
+              <span>Total</span>
+              <span className="text-base font-semibold text-contrast">
+                {formatCurrency(combinedTotal)}
+              </span>
+            </div>
+            {existingItems.length > 0 ? (
+              <p className="mt-1 text-[11px] text-contrast/60">
+                Includes {formatCurrency(existingTotal)} from existing items.
+              </p>
+            ) : null}
+          </div>
 
-              {feedback ? <p className="text-sm text-contrast/70">{feedback}</p> : null}
-              {ordersError ? <p className="text-sm text-rose-300">{ordersError}</p> : null}
+          {feedback ? <p className="text-sm text-contrast/70">{feedback}</p> : null}
+          {ordersError ? <p className="text-sm text-rose-300">{ordersError}</p> : null}
 
-              <div className="flex flex-col gap-3">
-                {orderStep === 2 ? (
-                  <>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (cartItems.length === 0) {
-                          setFeedback("Add at least one item to continue.");
-                          return;
-                        }
-                        setFeedback(null);
-                        setOrderStep(3);
-                      }}
-                      className="inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg"
-                    >
-                      Review order
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setOrderStep(1)}
-                      className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
-                    >
-                      Back to table
-                    </button>
-                  </>
-                ) : (
-                  <>
-                    <button
-                      type="button"
-                      onClick={handleSubmit}
-                      className="inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg"
-                    >
-                      Send to kitchen
-                    </button>
-                    {activeSessionId ? (
-                      <button
-                        type="button"
-                        onClick={async () => {
-                          const sendResult = await sendPendingItems(activeSessionId);
-                          if (!sendResult.ok) {
-                            setFeedback(sendResult.error ?? "Unable to send items.");
-                            return;
-                          }
-                          const closeResult = await closeSession(activeSessionId);
-                          if (!closeResult.ok) {
-                            setFeedback(closeResult.error ?? "Unable to close bill.");
-                            return;
-                          }
-                          setTable("");
-                          setCartItems([]);
-                          setFeedback(
-                            sendResult.skipped ? "Bill closed." : "Order sent and bill closed."
-                          );
-                          setOrderStep(1);
-                          setActiveSessionId(null);
-                        }}
-                        className="inline-flex items-center justify-center rounded-full border border-amber-400/40 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300 hover:text-amber-50"
-                      >
-                        Close bill
-                      </button>
-                    ) : null}
-                    <button
-                      type="button"
-                      onClick={() => setOrderStep(2)}
-                      className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
-                    >
-                      Back to items
-                    </button>
-                  </>
-                )}
+          <div className="flex flex-col gap-3">
+            {orderStep === 1 ? (
+              <>
                 <button
                   type="button"
                   onClick={() => {
-                    setTable("");
-                    setCartItems([]);
+                    if (cartItems.length === 0 && existingItems.length === 0) {
+                      setFeedback("Add at least one item to continue.");
+                      return;
+                    }
                     setFeedback(null);
-                    setOrderStep(1);
-                    setActiveSessionId(null);
+                    setOrderStep(2);
                   }}
+                  className="inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg"
+                >
+                  Bill & send
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  className="inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg"
+                >
+                  Send to kitchen
+                </button>
+                {activeSessionId ? (
+                  <button
+                    type="button"
+                    onClick={async () => {
+                      const sendResult = await sendPendingItems(activeSessionId);
+                      if (!sendResult.ok) {
+                        setFeedback(sendResult.error ?? "Unable to send items.");
+                        return;
+                      }
+                      const closeResult = await closeSession(activeSessionId);
+                      if (!closeResult.ok) {
+                        setFeedback(closeResult.error ?? "Unable to close bill.");
+                        return;
+                      }
+                      setTable("");
+                      setCartItems([]);
+                      setFeedback(
+                        sendResult.skipped ? "Bill closed." : "Order sent and bill closed."
+                      );
+                      setOrderStep(1);
+                      setActiveSessionId(null);
+                    }}
+                    className="inline-flex items-center justify-center rounded-full border border-amber-400/40 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300 hover:text-amber-50"
+                  >
+                    Close bill
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setOrderStep(1)}
                   className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
                 >
-                  Clear order
+                  Back to items
                 </button>
-              </div>
-            </>
-          )}
+              </>
+            )}
+            <button
+              type="button"
+              onClick={() => {
+                setTable("");
+                setCartItems([]);
+                setFeedback(null);
+                setOrderStep(1);
+                setActiveSessionId(null);
+              }}
+              className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+            >
+              Clear order
+            </button>
+          </div>
         </aside>
       </div>
 
@@ -978,7 +895,7 @@ const Cashier = () => {
                   Open bill
                 </p>
                 <h2 className="text-2xl font-semibold text-contrast">
-                  {billGroup.table === takeawayLabel ? takeawayLabel : `Table ${billGroup.table}`}
+                  {billGroup.table === takeawayLabel ? takeawayLabel : `Bill ${billGroup.table}`}
                 </h2>
                 <p className="mt-1 text-xs text-contrast/60">
                   {billGroup.ordersCount} order{billGroup.ordersCount === 1 ? "" : "s"}
@@ -1004,7 +921,7 @@ const Cashier = () => {
                   onClick={() => {
                     setTable(billGroup.table);
                     setActiveSessionId(billGroup.sessionId);
-                    setOrderStep(2);
+                    setOrderStep(1);
                     setBillTable(null);
                   }}
                   className="rounded-full bg-brand px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5"

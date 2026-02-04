@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { useOrders } from "../features/orders/OrdersContext";
 
 const statusStyles: Record<"new" | "served", string> = {
@@ -10,6 +10,8 @@ const formatCurrency = (value: number) => `EUR ${value.toFixed(2)}`;
 
 const formatTime = (value: string) =>
   new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+const formatBillLabel = (value: string) => (value === "Takeaway" ? "Takeaway" : `Bill ${value}`);
 
 const formatModifierLines = (modifiers?: Record<string, string[]>) => {
   if (!modifiers) return [];
@@ -41,11 +43,8 @@ const Kitchen = () => {
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand/70">
             Kitchen Display
           </p>
-          <h1 className="text-3xl font-bold text-contrast sm:text-4xl">Track every ticket in one glance.</h1>
-          <p className="mt-2 max-w-2xl text-sm text-contrast/75">
-            Update statuses as meals move through the line. Orders stay visible until they are marked
-            served.
-          </p>
+          <h1 className="text-3xl font-bold text-contrast sm:text-4xl">Kitchen</h1>
+          
         </div>
         <div className="flex flex-wrap gap-3">
           <button
@@ -120,7 +119,7 @@ const Kitchen = () => {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-lg font-semibold">Table {order.table}</p>
+                          <p className="text-lg font-semibold">{formatBillLabel(order.table)}</p>
                           <p className="text-xs text-contrast/60">
                             Placed {formatTime(order.createdAt)} • {doneCount}/{itemCount} done
                           </p>
@@ -240,7 +239,7 @@ const Kitchen = () => {
                       >
                         <div className="flex items-start justify-between gap-3">
                           <div>
-                          <p className="text-lg font-semibold">Table {order.table}</p>
+                          <p className="text-lg font-semibold">{formatBillLabel(order.table)}</p>
                           <p className="text-xs text-contrast/60">
                             Served {formatTime(order.createdAt)} • {doneCount}/{itemCount} done
                           </p>

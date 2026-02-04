@@ -300,13 +300,7 @@ const Admin = () => {
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand/70">
             Admin Console
           </p>
-          <h1 className="text-3xl font-bold text-contrast sm:text-4xl">
-            Manage the kiosk menu in one place.
-          </h1>
-          <p className="mt-2 max-w-2xl text-sm text-contrast/75">
-            Add or edit categories, sauces, sides, and menu items. Changes appear instantly on the
-            cashier screen.
-          </p>
+          <h1 className="text-3xl font-bold text-contrast sm:text-4xl">Admin</h1>
         </div>
         <div className="rounded-2xl border border-accent-3/60 bg-accent-2/70 px-4 py-3 text-sm text-contrast/70 shadow-sm">
           {isLoading ? "Syncing menu..." : `${items.length} menu items`}
