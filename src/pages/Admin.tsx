@@ -75,11 +75,29 @@ const Admin = () => {
     () => new Map(categories.map((category) => [category.id, category.name])),
     [categories]
   );
+  const selectedCategoryName = useMemo(
+    () => categories.find((category) => category.id === itemCategoryId)?.name?.trim().toLowerCase() ?? "",
+    [categories, itemCategoryId]
+  );
+  const isSidesCategory = selectedCategoryName === "sides";
+  const isDrinksCategory = selectedCategoryName === "drinks";
   useEffect(() => {
     if (!itemCategoryId && categories.length > 0) {
       setItemCategoryId(categories[0].id);
     }
   }, [categories, itemCategoryId]);
+  useEffect(() => {
+    if (isDrinksCategory) {
+      if (itemAllowSauces) setItemAllowSauces(false);
+      if (itemAllowSides) setItemAllowSides(false);
+      if (itemShowInKitchen) setItemShowInKitchen(false);
+      return;
+    }
+    if (isSidesCategory) {
+      if (itemAllowSides) setItemAllowSides(false);
+      if (!itemShowInKitchen) setItemShowInKitchen(true);
+    }
+  }, [isDrinksCategory, isSidesCategory, itemAllowSauces, itemAllowSides, itemShowInKitchen]);
   useEffect(() => {
     setCategoryEdits(
       categories.reduce<Record<string, string>>((acc, category) => {
@@ -325,13 +343,6 @@ const Admin = () => {
         >
           Edit sauces
         </button>
-        <button
-          type="button"
-          onClick={() => openEditListModal("side")}
-          className="rounded-full border border-accent-3/60 px-5 py-2 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
-        >
-          Edit sides
-        </button>
       </div>
       <div className="rounded-3xl border border-accent-3/60 bg-accent-2/70 p-8">
         <h2 className="text-lg font-semibold text-contrast">Menu items</h2>
@@ -481,30 +492,36 @@ const Admin = () => {
                     />
                   </div>
                   <div className="flex flex-wrap gap-4 text-sm text-contrast/70">
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={itemAllowSauces}
-                        onChange={(event) => setItemAllowSauces(event.target.checked)}
-                      />
-                      Allow sauces
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={itemAllowSides}
-                        onChange={(event) => setItemAllowSides(event.target.checked)}
-                      />
-                      Allow sides
-                    </label>
-                    <label className="flex items-center gap-2">
-                      <input
-                        type="checkbox"
-                        checked={itemShowInKitchen}
-                        onChange={(event) => setItemShowInKitchen(event.target.checked)}
-                      />
-                      Show in kitchen
-                    </label>
+                    {!isDrinksCategory ? (
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={itemAllowSauces}
+                          onChange={(event) => setItemAllowSauces(event.target.checked)}
+                        />
+                        Allow sauces
+                      </label>
+                    ) : null}
+                    {!isSidesCategory && !isDrinksCategory ? (
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={itemAllowSides}
+                          onChange={(event) => setItemAllowSides(event.target.checked)}
+                        />
+                        Allow sides
+                      </label>
+                    ) : null}
+                    {!isDrinksCategory && !isSidesCategory ? (
+                      <label className="flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={itemShowInKitchen}
+                          onChange={(event) => setItemShowInKitchen(event.target.checked)}
+                        />
+                        Show in kitchen
+                      </label>
+                    ) : null}
                   </div>
                 </>
               ) : (

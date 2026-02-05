@@ -13,14 +13,24 @@ const formatCurrency = (value: number) => `EUR ${value.toFixed(2)}`;
 const formatTime = (value: string) =>
   new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
 
+type ModifierLine = {
+  text: string;
+  isExtra: boolean;
+};
+
 const formatModifierLines = (modifiers?: Record<string, string[]>) => {
   if (!modifiers) return [];
   return Object.entries(modifiers)
-    .map(([group, values]) => {
-      if (!values || values.length === 0) return null;
-      return `${group}: ${values.join(", ")}`;
+    .flatMap(([group, values]) => {
+      if (!values || values.length === 0) return [];
+      return [
+        {
+          text: `${group}: ${values.join(", ")}`,
+          isExtra: /extra/i.test(group),
+        },
+      ];
     })
-    .filter(Boolean) as string[];
+    .filter(Boolean) as ModifierLine[];
 };
 
 const buildSummaryLines = (
@@ -236,9 +246,14 @@ const Bills = () => {
                           ) : null}
                         </div>
                         {modifierLines.length ? (
-                          <div className="mt-1 space-y-1 text-[11px] text-contrast/60">
+                          <div className="mt-1 space-y-1 text-[11px]">
                             {modifierLines.map((line) => (
-                              <div key={line}>{line}</div>
+                              <div
+                                key={line.text}
+                                className={line.isExtra ? "text-rose-300" : "text-contrast/60"}
+                              >
+                                {line.text}
+                              </div>
                             ))}
                           </div>
                         ) : null}

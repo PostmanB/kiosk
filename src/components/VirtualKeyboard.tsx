@@ -237,7 +237,6 @@ const VirtualKeyboard = () => {
       return;
     }
     if (key === "done") {
-      target.blur();
       setIsOpen(false);
       activeRef.current = null;
       return;

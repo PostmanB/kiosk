@@ -22,6 +22,15 @@ type CartItem = {
 
 const formatCurrency = (value: number) => `EUR ${value.toFixed(2)}`;
 const fallbackIconName = "ph:fork-knife";
+const COMMON_EXTRAS = [
+  "No onion",
+  "No veggies",
+  "No tomato",
+  "No lettuce",
+  "No pickles",
+  "No cheese",
+  "Extra sauce",
+];
 
 const normalizeModifiers = (modifiers: Record<string, string[]>) => {
   const sortedEntries = Object.entries(modifiers)
@@ -33,24 +42,36 @@ const normalizeModifiers = (modifiers: Record<string, string[]>) => {
 const modifiersSignature = (modifiers: Record<string, string[]>) =>
   JSON.stringify(normalizeModifiers(modifiers));
 
+type ModifierLine = {
+  text: string;
+  isExtra: boolean;
+};
+
 const formatModifierLines = (modifiers?: Record<string, string[]>) => {
   if (!modifiers) return [];
   return Object.entries(modifiers)
-    .map(([group, values]) => {
-      if (!values || values.length === 0) return null;
-      return `${group}: ${values.join(", ")}`;
+    .flatMap(([group, values]) => {
+      if (!values || values.length === 0) return [];
+      return [
+        {
+          text: `${group}: ${values.join(", ")}`,
+          isExtra: /extra/i.test(group),
+        },
+      ];
     })
-    .filter(Boolean) as string[];
+    .filter(Boolean) as ModifierLine[];
 };
 
 const buildModifierGroups = (
   item: MenuItem | null,
   sauces: { name: string }[],
-  sides: { name: string }[]
+  sideOptions: string[],
+  isSideItem: boolean,
+  isDrinkItem: boolean
 ) => {
   if (!item) return [];
   const groups: MenuModifierGroup[] = [];
-  if (item.allow_sauces) {
+  if (item.allow_sauces && !isDrinkItem) {
     groups.push({
       id: "Sauce",
       label: "Sauce",
@@ -58,12 +79,20 @@ const buildModifierGroups = (
       options: ["No sauce", ...sauces.map((sauce) => sauce.name)],
     });
   }
-  if (item.allow_sides) {
+  if (item.allow_sides && !isSideItem) {
     groups.push({
       id: "Side",
       label: "Side",
       type: "single",
-      options: ["No side", ...sides.map((side) => side.name)],
+      options: ["No side", ...sideOptions],
+    });
+  }
+  if (!isSideItem && !isDrinkItem && COMMON_EXTRAS.length > 0) {
+    groups.push({
+      id: "Extras",
+      label: "Extras",
+      type: "multi",
+      options: COMMON_EXTRAS,
     });
   }
   return groups;
@@ -100,7 +129,6 @@ const Cashier = () => {
     categories,
     items,
     sauces,
-    sides,
     isLoading: menuLoading,
     error: menuError,
   } = useMenu();
@@ -125,9 +153,34 @@ const Cashier = () => {
     toast(message, { type: tone });
   };
 
+  const sideCategory = useMemo(
+    () => categories.find((category) => category.name.trim().toLowerCase() === "sides"),
+    [categories]
+  );
+  const drinksCategory = useMemo(
+    () => categories.find((category) => category.name.trim().toLowerCase() === "drinks"),
+    [categories]
+  );
+  const sideItems = useMemo(
+    () => (sideCategory ? items.filter((item) => item.category_id === sideCategory.id) : []),
+    [items, sideCategory]
+  );
+  const sideOptions = useMemo(() => sideItems.map((item) => item.name), [sideItems]);
+  const sidePriceByName = useMemo(
+    () => new Map(sideItems.map((item) => [item.name, item.price])),
+    [sideItems]
+  );
+
   const detailGroups = useMemo(
-    () => buildModifierGroups(selectedItem, sauces, sides),
-    [selectedItem, sauces, sides]
+    () =>
+      buildModifierGroups(
+        selectedItem,
+        sauces,
+        sideOptions,
+        Boolean(selectedItem && sideCategory && selectedItem.category_id === sideCategory.id),
+        Boolean(selectedItem && drinksCategory && selectedItem.category_id === drinksCategory.id)
+      ),
+    [selectedItem, sauces, sideOptions, sideCategory, drinksCategory]
   );
 
   const itemsForCategory = useMemo(() => {
@@ -135,10 +188,34 @@ const Cashier = () => {
     return items.filter((item) => item.category_id === activeCategoryId);
   }, [items, activeCategoryId]);
 
-  const cartTotal = useMemo(
-    () => cartItems.reduce((sum, item) => sum + item.quantity * item.menuItem.price, 0),
-    [cartItems]
-  );
+  const topSellers = useMemo(() => {
+    const counts = new Map<string, number>();
+    orders.forEach((order) => {
+      order.items.forEach((item) => {
+        const name = item.name?.trim();
+        if (!name) return;
+        counts.set(name, (counts.get(name) ?? 0) + Math.max(0, item.quantity));
+      });
+    });
+    const itemByName = new Map(items.map((item) => [item.name, item]));
+    return Array.from(counts.entries())
+      .map(([name, quantity]) => ({
+        name,
+        quantity,
+        menuItem: itemByName.get(name) ?? null,
+      }))
+      .sort((a, b) => b.quantity - a.quantity)
+      .slice(0, 5);
+  }, [orders, items]);
+
+  const cartTotal = useMemo(() => {
+    return cartItems.reduce((sum, item) => {
+      const sideName = item.modifiers.Side?.[0];
+      const sidePrice =
+        sideName && sideName !== "No side" ? sidePriceByName.get(sideName) ?? 0 : 0;
+      return sum + item.quantity * (item.menuItem.price + sidePrice);
+    }, 0);
+  }, [cartItems, sidePriceByName]);
 
   const activeSessionOrders = useMemo(
     () => orders.filter((order) => (activeSessionId ? order.sessionId === activeSessionId : false)),
@@ -233,7 +310,13 @@ const Cashier = () => {
   };
 
   const openDetailPanel = (item: MenuItem) => {
-    const groups = buildModifierGroups(item, sauces, sides);
+    const groups = buildModifierGroups(
+      item,
+      sauces,
+      sideOptions,
+      Boolean(sideCategory && item.category_id === sideCategory.id),
+      Boolean(drinksCategory && item.category_id === drinksCategory.id)
+    );
     const defaults: Record<string, string[]> = {};
     groups.forEach((group) => {
       if (group.type === "single") {
@@ -329,7 +412,11 @@ const Cashier = () => {
         name: item.menuItem.name,
         quantity: item.quantity,
         modifiers: item.modifiers,
-        price: item.menuItem.price,
+        price:
+          item.menuItem.price +
+          (item.modifiers.Side?.[0] && item.modifiers.Side?.[0] !== "No side"
+            ? sidePriceByName.get(item.modifiers.Side[0]) ?? 0
+            : 0),
         registerCode: item.menuItem.register_code ?? undefined,
         showInKitchen: item.menuItem.show_in_kitchen,
       })),
@@ -373,7 +460,11 @@ const Cashier = () => {
         name: item.menuItem.name,
         quantity: item.quantity,
         modifiers: item.modifiers,
-        price: item.menuItem.price,
+        price:
+          item.menuItem.price +
+          (item.modifiers.Side?.[0] && item.modifiers.Side?.[0] !== "No side"
+            ? sidePriceByName.get(item.modifiers.Side[0]) ?? 0
+            : 0),
         registerCode: item.menuItem.register_code ?? undefined,
         showInKitchen: item.menuItem.show_in_kitchen,
       })),
@@ -398,6 +489,54 @@ const Cashier = () => {
         <section className="space-y-6">
           {orderStep === 1 ? (
             <>
+              {topSellers.length > 0 ? (
+                <div className="space-y-3">
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
+                      Top sellers
+                    </h3>
+                    <span className="text-xs text-contrast/50">All time</span>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                    {topSellers.map((entry) => {
+                      const canOpen = Boolean(entry.menuItem);
+                      return (
+                        <button
+                          key={entry.name}
+                          type="button"
+                          disabled={!canOpen}
+                          onClick={() => {
+                            if (entry.menuItem) {
+                              openDetailPanel(entry.menuItem);
+                            }
+                          }}
+                          className="group rounded-2xl border border-accent-3/60 bg-primary/70 p-3 text-left text-xs text-contrast shadow-sm transition hover:-translate-y-0.5 hover:border-brand/50 disabled:cursor-not-allowed disabled:opacity-60"
+                        >
+                          <div className="flex items-center justify-between gap-2">
+                            <div className="flex min-w-0 items-center gap-2">
+                              <div className="flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-xl border border-accent-3/60 bg-primary/60">
+                                <Icon
+                                  icon={entry.menuItem?.icon_name || fallbackIconName}
+                                  className="h-4 w-4 text-brand"
+                                />
+                              </div>
+                              <div className="min-w-0">
+                                <p className="truncate text-sm font-semibold text-contrast">
+                                  {entry.name}
+                                </p>
+                                <p className="text-[10px] text-contrast/60">
+                                  {entry.quantity.toLocaleString()} sold
+                                </p>
+                              </div>
+                            </div>
+                          </div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : null}
+
               <div className="flex flex-wrap gap-3">
                 {categories.length === 0 ? (
                   <span className="text-sm text-contrast/60">
@@ -517,6 +656,7 @@ const Cashier = () => {
                   }}
                   className="mt-3 w-full rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast outline-none transition focus:border-brand/60"
                   placeholder="e.g. Window 1, Marek"
+                  autoComplete="off"
                 />
                 <p className="mt-2 text-xs text-contrast/60">
                   Leave empty for takeaway. Enter a name to open a bill.
@@ -589,6 +729,10 @@ const Cashier = () => {
                   const modifierLines = Object.entries(item.modifiers)
                     .filter(([, values]) => values.length > 0)
                     .map(([group, values]) => `${group}: ${values.join(", ")}`);
+                  const sideName = item.modifiers.Side?.[0];
+                  const sidePrice =
+                    sideName && sideName !== "No side" ? sidePriceByName.get(sideName) ?? 0 : 0;
+                  const unitPrice = item.menuItem.price + sidePrice;
                   return (
                     <div
                       key={item.id}
@@ -631,7 +775,7 @@ const Cashier = () => {
                             +
                           </button>
                         </div>
-                        <span>{formatCurrency(item.menuItem.price * item.quantity)}</span>
+                        <span>{formatCurrency(unitPrice * item.quantity)}</span>
                       </div>
                     </div>
                   );
@@ -684,7 +828,7 @@ const Cashier = () => {
                 >
                   Send to kitchen
                 </button>
-                {activeSessionId ? (
+                {activeSessionId && billInputValue.trim() ? (
                   <button
                     type="button"
                     onClick={async () => {
@@ -780,6 +924,12 @@ const Cashier = () => {
                     <div className="flex flex-wrap gap-2">
                       {group.options.map((option) => {
                         const isSelected = (selectedModifiers[group.label] ?? []).includes(option);
+                        const sidePrice =
+                          group.label === "Side" && option !== "No side"
+                            ? sidePriceByName.get(option)
+                            : undefined;
+                        const optionLabel =
+                          sidePrice !== undefined ? `${option} (+${formatCurrency(sidePrice)})` : option;
                         return (
                           <button
                             key={option}
@@ -791,7 +941,7 @@ const Cashier = () => {
                                 : "border-accent-3/60 text-contrast/70 hover:border-brand/40 hover:text-brand"
                             }`}
                           >
-                            {option}
+                            {optionLabel}
                           </button>
                         );
                       })}
@@ -929,9 +1079,14 @@ const Cashier = () => {
                           ) : null}
                         </div>
                         {modifierLines.length ? (
-                          <div className="mt-1 space-y-1 text-[11px] text-contrast/60">
+                          <div className="mt-1 space-y-1 text-[11px]">
                             {modifierLines.map((line) => (
-                              <div key={line}>{line}</div>
+                              <div
+                                key={line.text}
+                                className={line.isExtra ? "text-rose-300" : "text-contrast/60"}
+                              >
+                                {line.text}
+                              </div>
                             ))}
                           </div>
                         ) : null}

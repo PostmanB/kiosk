@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useState } from "react";
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { supabase } from "../../lib/supabaseClient";
 
 export type MenuCategory = {
@@ -65,6 +65,7 @@ const TABLES = {
   sides: "kiosk_sides",
   items: "kiosk_items",
 };
+const DEFAULT_CATEGORIES = ["Sides", "Drinks"];
 
 const MenuContext = createContext<MenuContextValue | undefined>(undefined);
 
@@ -81,6 +82,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
   const [items, setItems] = useState<MenuItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const ensuredDefaultsRef = useRef(false);
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
@@ -126,6 +128,31 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
       supabase.removeChannel(channel);
     };
   }, [refresh]);
+
+  useEffect(() => {
+    if (isLoading || error || ensuredDefaultsRef.current) {
+      return;
+    }
+    const existing = new Set(
+      categories.map((category) => category.name.trim().toLowerCase())
+    );
+    const missing = DEFAULT_CATEGORIES.filter(
+      (name) => !existing.has(name.toLowerCase())
+    );
+    if (missing.length === 0) {
+      ensuredDefaultsRef.current = true;
+      return;
+    }
+    ensuredDefaultsRef.current = true;
+    supabase
+      .from(TABLES.categories)
+      .insert(missing.map((name) => ({ name })))
+      .then(({ error: insertError }) => {
+        if (!insertError) {
+          refresh();
+        }
+      });
+  }, [categories, error, isLoading, refresh]);
 
   const addCategory = useCallback(
     async (name: string) => {

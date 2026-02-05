@@ -14,14 +14,24 @@ const formatTime = (value: string) =>
 
 const formatBillLabel = (value: string) => (value === "Takeaway" ? "Takeaway" : `Bill ${value}`);
 
+type ModifierLine = {
+  text: string;
+  isExtra: boolean;
+};
+
 const formatModifierLines = (modifiers?: Record<string, string[]>) => {
   if (!modifiers) return [];
   return Object.entries(modifiers)
-    .map(([group, values]) => {
-      if (!values || values.length === 0) return null;
-      return `${group}: ${values.join(", ")}`;
+    .flatMap(([group, values]) => {
+      if (!values || values.length === 0) return [];
+      return [
+        {
+          text: `${group}: ${values.join(", ")}`,
+          isExtra: /extra/i.test(group),
+        },
+      ];
     })
-    .filter(Boolean) as string[];
+    .filter(Boolean) as ModifierLine[];
 };
 
 const Kitchen = () => {
@@ -171,9 +181,14 @@ const Kitchen = () => {
                                   ) : null}
                                 </div>
                                 {modifierLines.length ? (
-                                  <div className="space-y-1 text-[11px] text-contrast/60">
+                                  <div className="space-y-1 text-[11px]">
                                     {modifierLines.map((line) => (
-                                      <div key={line}>{line}</div>
+                                      <div
+                                        key={line.text}
+                                        className={line.isExtra ? "text-rose-300" : "text-contrast/60"}
+                                      >
+                                        {line.text}
+                                      </div>
                                     ))}
                                   </div>
                                 ) : null}
@@ -272,9 +287,14 @@ const Kitchen = () => {
                                     ) : null}
                                   </div>
                                   {modifierLines.length ? (
-                                    <div className="space-y-1 text-[11px] text-contrast/60">
+                                    <div className="space-y-1 text-[11px]">
                                       {modifierLines.map((line) => (
-                                        <div key={line}>{line}</div>
+                                        <div
+                                          key={line.text}
+                                          className={line.isExtra ? "text-rose-300" : "text-contrast/60"}
+                                        >
+                                          {line.text}
+                                        </div>
                                       ))}
                                     </div>
                                   ) : null}
