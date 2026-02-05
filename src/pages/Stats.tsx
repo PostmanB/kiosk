@@ -39,7 +39,9 @@ const Stats = () => {
     weekLabel,
     weeklySales,
     weeklyRangeLabel,
+    weeklyDates,
     itemStats,
+    sauceStats,
   } = useMemo(() => {
     const now = new Date();
     const weekStart = startOfWeek(now);
@@ -88,6 +90,24 @@ const Stats = () => {
       return map;
     };
 
+    const buildSauceStats = (subset: typeof orders) => {
+      const map = new Map<string, number>();
+      subset.forEach((order) => {
+        order.items.forEach((item) => {
+          const modifiers = item.modifiers ?? {};
+          Object.entries(modifiers).forEach(([group, values]) => {
+            if (!/sauce/i.test(group)) return;
+            values.forEach((value) => {
+              const name = value?.trim();
+              if (!name || /no\s*sauce/i.test(name)) return;
+              map.set(name, (map.get(name) ?? 0) + Math.max(0, item.quantity));
+            });
+          });
+        });
+      });
+      return map;
+    };
+
     const allTimeItems = buildItemStats(orders);
     const thisWeekItems = buildItemStats(thisWeekOrders);
     const lastWeekItems = buildItemStats(lastWeekOrders);
@@ -97,6 +117,18 @@ const Stats = () => {
         allTime: total,
         thisWeek: thisWeekItems.get(name) ?? 0,
         lastWeek: lastWeekItems.get(name) ?? 0,
+      }))
+      .sort((a, b) => b.allTime - a.allTime);
+
+    const allTimeSauces = buildSauceStats(orders);
+    const thisWeekSauces = buildSauceStats(thisWeekOrders);
+    const lastWeekSauces = buildSauceStats(lastWeekOrders);
+    const sauceStatsList = Array.from(allTimeSauces.entries())
+      .map(([name, total]) => ({
+        name,
+        allTime: total,
+        thisWeek: thisWeekSauces.get(name) ?? 0,
+        lastWeek: lastWeekSauces.get(name) ?? 0,
       }))
       .sort((a, b) => b.allTime - a.allTime);
 
@@ -130,7 +162,9 @@ const Stats = () => {
       ).toLocaleDateString()}`,
       weeklySales: weeklyTotals,
       weeklyRangeLabel: rangeLabel,
+      weeklyDates: weeks,
       itemStats: itemStatsList,
+      sauceStats: sauceStatsList,
     };
   }, [orders]);
 
@@ -150,12 +184,15 @@ const Stats = () => {
         : { arrow: "—", className: "text-contrast/60" };
 
   const chart = useMemo(() => {
-    const width = 640;
-    const height = 180;
-    const paddingX = 24;
-    const paddingY = 18;
+    const width = 1000;
+    const height = 300;
+    const paddingX = 36;
+    const paddingY = 30;
+    const labelYOffset = 20;
+    const valueOffset = 10;
     const maxValue = Math.max(1, ...weeklySales);
 
+    const lastIndex = Math.max(0, weeklySales.length - 1);
     const points = weeklySales.map((value, index) => {
       const x =
         paddingX +
@@ -163,13 +200,23 @@ const Stats = () => {
       const y =
         paddingY +
         (1 - value / maxValue) * (height - paddingY * 2);
-      return { x, y, value };
+      const isLast = index === lastIndex;
+      return {
+        x,
+        y,
+        value,
+        valueLabel: isLast
+          ? formatCurrency(value)
+          : Math.round(value).toLocaleString(),
+        dateLabel: weeklyDates[index] ? formatShortDate(weeklyDates[index]) : "",
+        showLabel: value > 0 || isLast,
+      };
     });
 
     const polyline = points.map((point) => `${point.x},${point.y}`).join(" ");
 
-    return { width, height, paddingX, paddingY, maxValue, points, polyline };
-  }, [weeklySales]);
+    return { width, height, paddingX, paddingY, labelYOffset, valueOffset, maxValue, points, polyline };
+  }, [weeklySales, weeklyDates]);
 
   return (
     <StatsGate>
@@ -277,7 +324,7 @@ const Stats = () => {
           <div className="mt-4 rounded-2xl border border-accent-3/60 bg-primary/70 p-4">
             <svg
               viewBox={`0 0 ${chart.width} ${chart.height}`}
-              className="h-40 w-full"
+              className="h-72 w-full"
               role="img"
               aria-label="Weekly sales chart"
             >
@@ -297,20 +344,43 @@ const Stats = () => {
                 strokeOpacity="0.6"
               />
               {chart.points.map((point, index) => (
-                <circle
-                  key={`point-${index}`}
-                  cx={point.x}
-                  cy={point.y}
-                  r="3"
-                  fill="currentColor"
-                  opacity={0.8}
-                />
+                <g key={`point-${index}`}>
+                  <circle
+                    cx={point.x}
+                    cy={point.y}
+                    r="3"
+                    fill="currentColor"
+                    opacity={0.85}
+                  />
+                  {point.showLabel ? (
+                    <>
+                      <text
+                        x={point.x + 8}
+                        y={Math.max(chart.paddingY, point.y - chart.valueOffset)}
+                        fontSize="10"
+                        fill="currentColor"
+                        opacity="0.7"
+                      >
+                        {point.valueLabel}
+                      </text>
+                      <text
+                        x={point.x}
+                        y={chart.height - chart.paddingY + chart.labelYOffset}
+                        textAnchor="middle"
+                        fontSize="9"
+                        fill="currentColor"
+                        opacity="0.55"
+                        transform={`rotate(-45 ${point.x} ${
+                          chart.height - chart.paddingY + chart.labelYOffset
+                        })`}
+                      >
+                        {point.dateLabel}
+                      </text>
+                    </>
+                  ) : null}
+                </g>
               ))}
             </svg>
-            <div className="mt-3 flex items-center justify-between text-xs text-contrast/60">
-              <span>0</span>
-              <span>{formatCurrency(chart.maxValue)}</span>
-            </div>
           </div>
         </div>
 
@@ -359,6 +429,65 @@ const Stats = () => {
                         return (
                           <span className={`font-semibold ${meta.className}`}>
                             {meta.arrow} {item.thisWeek.toLocaleString()}{" "}
+                            <span className="text-[11px] font-semibold opacity-80">
+                              ({deltaLabel})
+                            </span>
+                          </span>
+                        );
+                      })()}
+                    </span>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-accent-3/60 bg-accent-1/80 p-6 shadow-lg shadow-accent-4/20">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
+                Sauces Used
+              </p>
+              <h2 className="text-xl font-semibold text-contrast">All time vs this week</h2>
+            </div>
+            <div className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
+              {weekLabel}
+            </div>
+          </div>
+          <div className="mt-4 overflow-hidden rounded-2xl border border-accent-3/60 bg-primary/70">
+            <div className="grid grid-cols-[1fr_120px_120px] gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-contrast/60">
+              <span>Sauce</span>
+              <span className="text-right">All time</span>
+              <span className="text-right">This week</span>
+            </div>
+            <div className="max-h-[360px] overflow-y-auto">
+              {sauceStats.length === 0 ? (
+                <div className="px-4 py-6 text-sm text-contrast/60">No sauces used yet.</div>
+              ) : (
+                sauceStats.map((sauce) => (
+                  <div
+                    key={sauce.name}
+                    className="grid grid-cols-[1fr_120px_120px] gap-2 border-t border-accent-3/60 px-4 py-3 text-sm text-contrast"
+                  >
+                    <span className="font-semibold">{sauce.name}</span>
+                    <span className="text-right">{sauce.allTime.toLocaleString()}</span>
+                    <span className="text-right">
+                      {(() => {
+                        const delta = sauce.thisWeek - sauce.lastWeek;
+                        const meta =
+                          delta > 0
+                            ? { arrow: "▲", className: "text-emerald-500" }
+                            : delta < 0
+                              ? { arrow: "▼", className: "text-rose-400" }
+                              : { arrow: "—", className: "text-contrast/60" };
+                        const deltaLabel =
+                          delta === 0
+                            ? "0"
+                            : `${delta > 0 ? "+" : ""}${delta.toLocaleString()}`;
+                        return (
+                          <span className={`font-semibold ${meta.className}`}>
+                            {meta.arrow} {sauce.thisWeek.toLocaleString()}{" "}
                             <span className="text-[11px] font-semibold opacity-80">
                               ({deltaLabel})
                             </span>
