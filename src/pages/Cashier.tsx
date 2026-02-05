@@ -161,14 +161,23 @@ const Cashier = () => {
     () => categories.find((category) => category.name.trim().toLowerCase() === "drinks"),
     [categories]
   );
+  const activeItems = useMemo(
+    () => items.filter((item) => item.is_active !== false),
+    [items]
+  );
   const sideItems = useMemo(
+    () =>
+      sideCategory ? activeItems.filter((item) => item.category_id === sideCategory.id) : [],
+    [activeItems, sideCategory]
+  );
+  const allSideItems = useMemo(
     () => (sideCategory ? items.filter((item) => item.category_id === sideCategory.id) : []),
     [items, sideCategory]
   );
   const sideOptions = useMemo(() => sideItems.map((item) => item.name), [sideItems]);
   const sidePriceByName = useMemo(
-    () => new Map(sideItems.map((item) => [item.name, item.price])),
-    [sideItems]
+    () => new Map(allSideItems.map((item) => [item.name, item.price])),
+    [allSideItems]
   );
 
   const detailGroups = useMemo(
@@ -204,6 +213,8 @@ const Cashier = () => {
         quantity,
         menuItem: itemByName.get(name) ?? null,
       }))
+      .filter((entry) => entry.menuItem)
+      .filter((entry) => entry.menuItem?.is_active !== false)
       .sort((a, b) => b.quantity - a.quantity)
       .slice(0, 5);
   }, [orders, items]);
@@ -499,18 +510,22 @@ const Cashier = () => {
                   </div>
                   <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
                     {topSellers.map((entry) => {
-                      const canOpen = Boolean(entry.menuItem);
+                      const canOpen = Boolean(entry.menuItem && entry.menuItem.is_active !== false);
                       return (
                         <button
                           key={entry.name}
                           type="button"
                           disabled={!canOpen}
                           onClick={() => {
-                            if (entry.menuItem) {
+                            if (entry.menuItem && entry.menuItem.is_active !== false) {
                               openDetailPanel(entry.menuItem);
                             }
                           }}
-                          className="group rounded-2xl border border-accent-3/60 bg-primary/70 p-3 text-left text-xs text-contrast shadow-sm transition hover:-translate-y-0.5 hover:border-brand/50 disabled:cursor-not-allowed disabled:opacity-60"
+                          className={`group rounded-2xl border border-accent-3/60 bg-primary/70 p-3 text-left text-xs text-contrast shadow-sm transition ${
+                            canOpen
+                              ? "hover:-translate-y-0.5 hover:border-brand/50"
+                              : "cursor-not-allowed opacity-50"
+                          }`}
                         >
                           <div className="flex items-center justify-between gap-2">
                             <div className="flex min-w-0 items-center gap-2">
@@ -566,44 +581,65 @@ const Cashier = () => {
                     No items in this category yet.
                   </div>
                 ) : (
-                  itemsForCategory.map((item) => (
+                  itemsForCategory.map((item) => {
+                    const isActive = item.is_active !== false;
+                    return (
                     <button
                       key={item.id}
                       type="button"
-                      onClick={() => openDetailPanel(item)}
-                      className="group rounded-3xl border border-accent-3/60 bg-accent-1/80 p-5 text-left shadow-lg shadow-accent-4/20 transition hover:-translate-y-1 hover:border-brand/50"
+                      disabled={!isActive}
+                      onClick={() => {
+                        if (isActive) {
+                          openDetailPanel(item);
+                        }
+                      }}
+                      className={`group relative overflow-hidden rounded-3xl border border-accent-3/60 bg-accent-1/80 p-5 text-left shadow-lg shadow-accent-4/20 transition ${
+                        isActive
+                          ? "hover:-translate-y-1 hover:border-brand/50"
+                          : "cursor-not-allowed"
+                      }`}
                     >
-                      <div className="flex items-start justify-between gap-3">
-                        <div className="flex min-w-0 flex-1 flex-col gap-2">
-                          <h3 className="line-clamp-2 text-lg font-semibold leading-tight text-contrast">
-                            {item.name}
-                          </h3>
-                          <div className="flex min-w-0 items-start gap-3">
-                            <span className="min-w-[88px] flex-shrink-0 rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-center text-xs font-semibold tabular-nums text-brand">
-                              {formatCurrency(item.price)}
-                            </span>
-                            {item.description ? (
-                              <p className="text-xs text-contrast/70">{item.description}</p>
-                            ) : null}
+                      {!isActive ? (
+                        <span className="pointer-events-none absolute inset-0">
+                          <span className="absolute left-1/2 top-1/2 w-[200%] -translate-x-1/2 -translate-y-1/2 -rotate-[18deg] text-center text-3xl font-extrabold uppercase tracking-[0.35em] text-rose-500">
+                            Sold out
+                          </span>
+                        </span>
+                      ) : null}
+                      <div className={isActive ? "" : "opacity-35"}>
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex min-w-0 flex-1 flex-col gap-2">
+                            <h3 className="line-clamp-2 text-lg font-semibold leading-tight text-contrast">
+                              {item.name}
+                            </h3>
+                            <div className="flex min-w-0 items-start gap-3">
+                              <span className="min-w-[88px] flex-shrink-0 rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-center text-xs font-semibold tabular-nums text-brand">
+                                {formatCurrency(item.price)}
+                              </span>
+                              {item.description ? (
+                                <p className="text-xs text-contrast/70">{item.description}</p>
+                              ) : null}
+                            </div>
+                          </div>
+                          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl border border-accent-3/60 bg-primary/60">
+                            <Icon
+                              icon={item.icon_name || fallbackIconName}
+                              className="h-6 w-6 text-brand"
+                            />
                           </div>
                         </div>
-                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl border border-accent-3/60 bg-primary/60">
-                          <Icon
-                            icon={item.icon_name || fallbackIconName}
-                            className="h-6 w-6 text-brand"
-                          />
+                        <div className="mt-4 flex items-center justify-between text-xs text-contrast/60">
+                          <span>
+                            {item.allow_sauces || item.allow_sides ? "Customize" : "Quick add"}
+                          </span>
+                          <span className={isActive ? "text-brand/70 transition group-hover:text-brand" : "text-contrast/50"}>
+                            {isActive ? "Tap to add" : "Disabled"}
+                          </span>
                         </div>
                       </div>
-                      <div className="mt-4 flex items-center justify-between text-xs text-contrast/60">
-                        <span>
-                          {item.allow_sauces || item.allow_sides ? "Customize" : "Quick add"}
-                        </span>
-                        <span className="text-brand/70 transition group-hover:text-brand">
-                          Tap to add
-                        </span>
-                      </div>
                     </button>
-                  ))
+                  );
+                })
                 )}
               </div>
             </>

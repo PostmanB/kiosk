@@ -27,6 +27,7 @@ export type MenuItem = {
   allow_sauces: boolean;
   allow_sides: boolean;
   show_in_kitchen: boolean;
+  is_active?: boolean;
 };
 
 type AddItemInput = {
@@ -39,6 +40,7 @@ type AddItemInput = {
   allow_sauces: boolean;
   allow_sides: boolean;
   show_in_kitchen?: boolean;
+  is_active?: boolean;
 };
 
 type MenuContextValue = {
@@ -50,6 +52,7 @@ type MenuContextValue = {
   error: string | null;
   refresh: () => Promise<void>;
   addCategory: (name: string) => Promise<{ ok: boolean; error?: string }>;
+  deleteCategory: (id: string) => Promise<{ ok: boolean; error?: string }>;
   addSauce: (name: string) => Promise<{ ok: boolean; error?: string }>;
   addSide: (name: string) => Promise<{ ok: boolean; error?: string }>;
   addItem: (input: AddItemInput) => Promise<{ ok: boolean; error?: string }>;
@@ -57,6 +60,7 @@ type MenuContextValue = {
   updateSauce: (id: string, name: string) => Promise<{ ok: boolean; error?: string }>;
   updateSide: (id: string, name: string) => Promise<{ ok: boolean; error?: string }>;
   updateItem: (input: AddItemInput & { id: string }) => Promise<{ ok: boolean; error?: string }>;
+  deleteItem: (id: string) => Promise<{ ok: boolean; error?: string }>;
 };
 
 const TABLES = {
@@ -73,6 +77,7 @@ const normalizeItem = (item: MenuItem) => ({
   ...item,
   price: Number(item.price),
   show_in_kitchen: item.show_in_kitchen ?? true,
+  is_active: item.is_active ?? true,
 });
 
 export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
@@ -174,6 +179,20 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
     [refresh]
   );
 
+  const deleteCategory = useCallback(
+    async (id: string) => {
+      const { error: deleteError } = await supabase.from(TABLES.categories).delete().eq("id", id);
+      if (deleteError) {
+        setError(deleteError.message);
+        return { ok: false, error: deleteError.message };
+      }
+      setError(null);
+      await refresh();
+      return { ok: true };
+    },
+    [refresh]
+  );
+
   const addSauce = useCallback(
     async (name: string) => {
       const trimmed = name.trim();
@@ -233,6 +252,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
         allow_sauces: input.allow_sauces,
         allow_sides: input.allow_sides,
         show_in_kitchen: input.show_in_kitchen ?? true,
+        is_active: input.is_active ?? true,
       });
 
       if (insertError) {
@@ -335,6 +355,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
           allow_sauces: input.allow_sauces,
           allow_sides: input.allow_sides,
           show_in_kitchen: input.show_in_kitchen ?? true,
+          is_active: input.is_active ?? true,
         })
         .eq("id", input.id);
 
@@ -343,6 +364,20 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
         return { ok: false, error: updateError.message };
       }
 
+      setError(null);
+      await refresh();
+      return { ok: true };
+    },
+    [refresh]
+  );
+
+  const deleteItem = useCallback(
+    async (id: string) => {
+      const { error: deleteError } = await supabase.from(TABLES.items).delete().eq("id", id);
+      if (deleteError) {
+        setError(deleteError.message);
+        return { ok: false, error: deleteError.message };
+      }
       setError(null);
       await refresh();
       return { ok: true };
@@ -360,6 +395,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
       error,
       refresh,
       addCategory,
+      deleteCategory,
       addSauce,
       addSide,
       addItem,
@@ -367,6 +403,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
       updateSauce,
       updateSide,
       updateItem,
+      deleteItem,
     }),
     [
       categories,
@@ -377,6 +414,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
       error,
       refresh,
       addCategory,
+      deleteCategory,
       addSauce,
       addSide,
       addItem,
@@ -384,6 +422,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
       updateSauce,
       updateSide,
       updateItem,
+      deleteItem,
     ]
   );
 

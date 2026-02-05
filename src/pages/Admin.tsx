@@ -45,6 +45,7 @@ const Admin = () => {
     isLoading,
     error,
     addCategory,
+    deleteCategory,
     addSauce,
     addSide,
     addItem,
@@ -52,6 +53,7 @@ const Admin = () => {
     updateSauce,
     updateSide,
     updateItem,
+    deleteItem,
   } = useMenu();
   const [modal, setModal] = useState<ModalState>(null);
   const [modalFeedback, setModalFeedback] = useState<string | null>(null);
@@ -66,6 +68,9 @@ const Admin = () => {
   const [itemAllowSauces, setItemAllowSauces] = useState(true);
   const [itemAllowSides, setItemAllowSides] = useState(false);
   const [itemShowInKitchen, setItemShowInKitchen] = useState(true);
+  const [itemIsActive, setItemIsActive] = useState(true);
+  const [confirmDeleteItem, setConfirmDeleteItem] = useState(false);
+  const [confirmDeleteCategoryId, setConfirmDeleteCategoryId] = useState<string | null>(null);
   const [categoryEdits, setCategoryEdits] = useState<Record<string, string>>({});
   const [sauceEdits, setSauceEdits] = useState<Record<string, string>>({});
   const [sideEdits, setSideEdits] = useState<Record<string, string>>({});
@@ -75,6 +80,13 @@ const Admin = () => {
     () => new Map(categories.map((category) => [category.id, category.name])),
     [categories]
   );
+  const categoryItemCounts = useMemo(() => {
+    const counts = new Map<string, number>();
+    items.forEach((item) => {
+      counts.set(item.category_id, (counts.get(item.category_id) ?? 0) + 1);
+    });
+    return counts;
+  }, [items]);
   const selectedCategoryName = useMemo(
     () => categories.find((category) => category.id === itemCategoryId)?.name?.trim().toLowerCase() ?? "",
     [categories, itemCategoryId]
@@ -125,6 +137,8 @@ const Admin = () => {
   const closeModal = () => {
     setModal(null);
     setModalFeedback(null);
+    setConfirmDeleteItem(false);
+    setConfirmDeleteCategoryId(null);
   };
   const openAddModal = (type: "category" | "sauce" | "side" | "item") => {
     setModal({ mode: "add", type });
@@ -139,6 +153,8 @@ const Admin = () => {
     setItemAllowSauces(true);
     setItemAllowSides(false);
     setItemShowInKitchen(true);
+    setItemIsActive(true);
+    setConfirmDeleteItem(false);
   };
   const openEditListModal = (type: "category" | "sauce" | "side") => {
     setModal({ mode: "edit-list", type });
@@ -158,6 +174,8 @@ const Admin = () => {
     setItemAllowSauces(match?.allow_sauces ?? true);
     setItemAllowSides(match?.allow_sides ?? false);
     setItemShowInKitchen(match?.show_in_kitchen ?? true);
+    setItemIsActive(match?.is_active ?? true);
+    setConfirmDeleteItem(false);
   };
   const handleSave = async () => {
     if (!modal) return;
@@ -188,6 +206,7 @@ const Admin = () => {
           allow_sauces: itemAllowSauces,
           allow_sides: itemAllowSides,
           show_in_kitchen: itemShowInKitchen,
+          is_active: itemIsActive,
         });
         setModalFeedback(result.ok ? "Item added." : result.error ?? "Unable to add item.");
         if (result.ok) closeModal();
@@ -205,6 +224,7 @@ const Admin = () => {
         allow_sauces: itemAllowSauces,
         allow_sides: itemAllowSides,
         show_in_kitchen: itemShowInKitchen,
+        is_active: itemIsActive,
       });
       setModalFeedback(result.ok ? "Saved." : result.error ?? "Unable to save.");
       if (result.ok) closeModal();
@@ -253,6 +273,7 @@ const Admin = () => {
       type === "category" ? setCategoryEdits : type === "sauce" ? setSauceEdits : setSideEdits;
     const saveHandler =
       type === "category" ? handleUpdateCategory : type === "sauce" ? handleUpdateSauce : handleUpdateSide;
+    const canDelete = type === "category";
     return (
       <div className="space-y-3">
         <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-accent-3/60 bg-primary/60 p-4 sm:flex-row sm:items-center">
@@ -301,6 +322,44 @@ const Admin = () => {
                 >
                   Save
                 </button>
+                {canDelete ? (
+                  (() => {
+                    const count = categoryItemCounts.get(entry.id) ?? 0;
+                    const isDefault =
+                      ["sides", "drinks"].includes(entry.name.trim().toLowerCase());
+                    if (count > 0 || isDefault) {
+                      return (
+                        <span className="text-[11px] text-contrast/50">
+                          {isDefault ? "Default" : `${count} items`}
+                        </span>
+                      );
+                    }
+                    if (confirmDeleteCategoryId === entry.id) {
+                      return (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const result = await deleteCategory(entry.id);
+                            setConfirmDeleteCategoryId(null);
+                            setModalFeedback(result.ok ? "Category deleted." : result.error ?? "Unable to delete.");
+                          }}
+                          className="rounded-full border border-rose-400/70 bg-rose-500/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-rose-300 transition hover:border-rose-300 hover:text-rose-200"
+                        >
+                          Confirm delete
+                        </button>
+                      );
+                    }
+                    return (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteCategoryId(entry.id)}
+                          className="rounded-full border border-rose-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-rose-300 transition hover:border-rose-300 hover:text-rose-200"
+                        >
+                          Delete
+                        </button>
+                    );
+                  })()
+                ) : null}
                 {rowFeedback[entry.id] ? (
                   <span className="text-xs text-contrast/60">{rowFeedback[entry.id]}</span>
                 ) : null}
@@ -355,8 +414,16 @@ const Admin = () => {
                 key={item.id}
                 type="button"
                 onClick={() => openEditItemModal(item.id)}
-                className="flex h-full flex-col gap-2 rounded-2xl border border-accent-3/60 bg-primary/70 p-4 text-left text-sm text-contrast transition hover:border-brand/50 hover:-translate-y-0.5"
+                className="group relative flex h-full flex-col gap-2 overflow-hidden rounded-2xl border border-accent-3/60 bg-primary/70 p-4 text-left text-sm text-contrast transition hover:border-brand/50 hover:-translate-y-0.5"
               >
+                {item.is_active === false ? (
+                  <span className="pointer-events-none absolute inset-0">
+                    <span className="absolute left-1/2 top-1/2 w-[200%] -translate-x-1/2 -translate-y-1/2 -rotate-[18deg] text-center text-2xl font-extrabold uppercase tracking-[0.35em] text-rose-500">
+                      Disabled
+                    </span>
+                  </span>
+                ) : null}
+                <div className={item.is_active === false ? "opacity-35" : ""}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
                     <div className="flex h-10 w-10 items-center justify-center rounded-2xl border border-accent-3/60 bg-primary/60">
@@ -388,6 +455,7 @@ const Admin = () => {
                   {item.allow_sides ? <span>Sides</span> : null}
                 </div>
                 <span className="text-[11px] text-brand/70">Tap to edit</span>
+                </div>
               </button>
             ))}
           </div>
@@ -416,9 +484,10 @@ const Admin = () => {
               <button
                 type="button"
                 onClick={closeModal}
-                className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                aria-label="Close"
+                className="flex h-9 w-9 items-center justify-center rounded-full border border-accent-3/60 text-contrast/70 transition hover:border-brand/50 hover:text-brand"
               >
-                Close
+                ×
               </button>
             </div>
             <div className="mt-6 space-y-4">
@@ -534,21 +603,57 @@ const Admin = () => {
               )}
               {modalFeedback ? <p className="text-xs text-contrast/70">{modalFeedback}</p> : null}
               {modal.mode !== "edit-list" ? (
-                <div className="flex flex-col gap-3 sm:flex-row sm:items-center">
-                  <button
-                    type="button"
-                    onClick={handleSave}
-                    className="rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg"
-                  >
-                    {modal.mode === "add" ? "Add" : "Save"}
-                  </button>
-                  <button
-                    type="button"
-                    onClick={closeModal}
-                    className="rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
-                  >
-                    Cancel
-                  </button>
+                <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+                  {modal.mode === "edit-item" ? (
+                    <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
+                      <button
+                        type="button"
+                        onClick={() => setItemIsActive((prev) => !prev)}
+                        className={`rounded-full border px-5 py-3 text-sm font-semibold uppercase tracking-wide transition ${
+                          itemIsActive
+                            ? "border-slate-300/60 text-slate-500 hover:border-slate-400 hover:text-slate-600"
+                            : "border-emerald-400/50 text-emerald-400 hover:border-emerald-300 hover:text-emerald-300"
+                        }`}
+                      >
+                        {itemIsActive ? "Disable item" : "Enable item"}
+                      </button>
+                      {confirmDeleteItem ? (
+                        <button
+                          type="button"
+                          onClick={async () => {
+                            const result = await deleteItem(modal.id);
+                            setConfirmDeleteItem(false);
+                            setModalFeedback(result.ok ? "Item deleted." : result.error ?? "Unable to delete item.");
+                            if (result.ok) {
+                              closeModal();
+                            }
+                          }}
+                          className="rounded-full border border-rose-400/70 bg-rose-500/15 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-rose-300 transition hover:border-rose-300 hover:text-rose-200"
+                        >
+                          Confirm delete
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => setConfirmDeleteItem(true)}
+                          className="rounded-full border border-rose-400/60 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-rose-300 transition hover:border-rose-300 hover:text-rose-200"
+                        >
+                          Delete item
+                        </button>
+                      )}
+                    </div>
+                  ) : (
+                    <span />
+                  )}
+                  <div className="sm:ml-auto">
+                    <button
+                      type="button"
+                      onClick={handleSave}
+                      className="rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg"
+                    >
+                      {modal.mode === "add" ? "Add" : "Save"}
+                    </button>
+                  </div>
                 </div>
               ) : null}
             </div>
