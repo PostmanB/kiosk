@@ -383,15 +383,6 @@ const Cashier = () => {
 
   return (
     <section className="space-y-10">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand/70">
-            Cashier Console
-          </p>
-          <h1 className="text-3xl font-bold text-contrast sm:text-4xl">Cashier</h1>
-        </div>
-      </header>
-
       {menuError ? (
         <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">
           {menuError}
@@ -403,7 +394,7 @@ const Cashier = () => {
         <span className={orderStep === 2 ? "text-brand" : ""}>2. Bill & Send</span>
       </div>
 
-      <div className="grid gap-8 lg:grid-cols-[1.3fr_0.7fr]">
+      <div className="grid gap-8 lg:grid-cols-[1.4fr_0.6fr]">
         <section className="space-y-6">
           {orderStep === 1 ? (
             <>
@@ -444,23 +435,25 @@ const Cashier = () => {
                       className="group rounded-3xl border border-accent-3/60 bg-accent-1/80 p-5 text-left shadow-lg shadow-accent-4/20 transition hover:-translate-y-1 hover:border-brand/50"
                     >
                       <div className="flex items-start justify-between gap-3">
-                        <div className="flex items-start gap-3">
-                          <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-accent-3/60 bg-primary/60">
-                            <Icon
-                              icon={item.icon_name || fallbackIconName}
-                              className="h-6 w-6 text-brand"
-                            />
-                          </div>
-                          <div>
-                            <h3 className="text-lg font-semibold text-contrast">{item.name}</h3>
+                        <div className="flex min-w-0 flex-1 flex-col gap-2">
+                          <h3 className="line-clamp-2 text-lg font-semibold leading-tight text-contrast">
+                            {item.name}
+                          </h3>
+                          <div className="flex min-w-0 items-start gap-3">
+                            <span className="min-w-[88px] flex-shrink-0 rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-center text-xs font-semibold tabular-nums text-brand">
+                              {formatCurrency(item.price)}
+                            </span>
                             {item.description ? (
-                              <p className="mt-1 text-xs text-contrast/70">{item.description}</p>
+                              <p className="text-xs text-contrast/70">{item.description}</p>
                             ) : null}
                           </div>
                         </div>
-                        <span className="rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-xs font-semibold text-brand">
-                          {formatCurrency(item.price)}
-                        </span>
+                        <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl border border-accent-3/60 bg-primary/60">
+                          <Icon
+                            icon={item.icon_name || fallbackIconName}
+                            className="h-6 w-6 text-brand"
+                          />
+                        </div>
                       </div>
                       <div className="mt-4 flex items-center justify-between text-xs text-contrast/60">
                         <span>
@@ -883,6 +876,7 @@ const Cashier = () => {
                       notify(result.error ?? "Unable to close bill.", "error");
                       return;
                     }
+                    notify("Bill closed.", "success");
                     setBillTable(null);
                   }}
                   className="rounded-full border border-amber-400/40 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300 hover:text-amber-50"

@@ -81,9 +81,29 @@ const clearText = (element: TextTarget) => {
   applyValue(element, "", 0);
 };
 
+const getFieldLabel = (element: TextTarget) => {
+  const ariaLabel = element.getAttribute("aria-label");
+  if (ariaLabel) return ariaLabel;
+  if (element.id) {
+    try {
+      const label = document.querySelector(`label[for="${CSS.escape(element.id)}"]`);
+      const labelText = label?.textContent?.trim();
+      if (labelText) return labelText;
+    } catch {
+      // Ignore selector errors and fall back to other identifiers.
+    }
+  }
+  if (element.placeholder) return element.placeholder;
+  if (element.name) return element.name;
+  return "Active field";
+};
+
 const VirtualKeyboard = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [shift, setShift] = useState(false);
+  const [activeLabel, setActiveLabel] = useState("Active field");
+  const [activeValue, setActiveValue] = useState("");
+  const [activePlaceholder, setActivePlaceholder] = useState("");
   const activeRef = useRef<TextTarget | null>(null);
   const keyboardRef = useRef<HTMLDivElement | null>(null);
   const repeatTimeoutRef = useRef<number | null>(null);
@@ -96,7 +116,7 @@ const VirtualKeyboard = () => {
       ["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"],
       ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
       ["shift", "z", "x", "c", "v", "b", "n", "m", "backspace"],
-      ["space", "-", "@", ".", "/", "clear", "done"],
+      ["space", "-", "@", ".", ",", "/", "clear", "done"],
     ],
     []
   );
@@ -108,6 +128,9 @@ const VirtualKeyboard = () => {
       activeRef.current = target;
       setIsOpen(true);
       setShift(false);
+      setActiveLabel(getFieldLabel(target));
+      setActiveValue(target.value ?? "");
+      setActivePlaceholder(target.placeholder ?? "");
       window.setTimeout(() => {
         target.scrollIntoView({ block: "center", behavior: "smooth" });
       }, 0);
@@ -118,10 +141,15 @@ const VirtualKeyboard = () => {
         const active = isTextTarget(document.activeElement);
         if (active) {
           activeRef.current = active;
+          setActiveLabel(getFieldLabel(active));
+          setActiveValue(active.value ?? "");
+          setActivePlaceholder(active.placeholder ?? "");
           return;
         }
         setIsOpen(false);
         activeRef.current = null;
+        setActiveValue("");
+        setActivePlaceholder("");
       }, 0);
     };
 
@@ -145,12 +173,20 @@ const VirtualKeyboard = () => {
       stopRepeat();
     };
 
+    const handleInput = (event: Event) => {
+      const target = isTextTarget(event.target);
+      if (!target || target !== activeRef.current) return;
+      setActiveValue(target.value ?? "");
+      setActivePlaceholder(target.placeholder ?? "");
+    };
+
     document.addEventListener("focusin", handleFocusIn);
     document.addEventListener("focusout", handleFocusOut);
     document.addEventListener("pointerdown", handlePointerDown);
     document.addEventListener("keydown", handleKeyDown);
     document.addEventListener("pointerup", handlePointerUp);
     document.addEventListener("pointercancel", handlePointerUp);
+    document.addEventListener("input", handleInput);
 
     return () => {
       if (repeatTimeoutRef.current) {
@@ -165,6 +201,7 @@ const VirtualKeyboard = () => {
       document.removeEventListener("keydown", handleKeyDown);
       document.removeEventListener("pointerup", handlePointerUp);
       document.removeEventListener("pointercancel", handlePointerUp);
+      document.removeEventListener("input", handleInput);
     };
   }, []);
 
@@ -236,6 +273,14 @@ const VirtualKeyboard = () => {
         ref={keyboardRef}
         className="mx-auto w-full max-w-5xl rounded-3xl border border-accent-3/60 bg-primary/95 p-4 shadow-2xl backdrop-blur"
       >
+        <div className="mb-4 rounded-2xl border border-accent-3/60 bg-accent-1/80 px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-[0.3em] text-contrast/60">
+            {activeLabel}
+          </p>
+          <div className="mt-2 min-h-[1.5rem] text-base font-semibold text-contrast">
+            {activeValue || activePlaceholder || " "}
+          </div>
+        </div>
         <div className="mb-3 flex items-center justify-between">
           <span className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
             Virtual Keyboard

@@ -295,17 +295,9 @@ const Admin = () => {
   };
   return (
     <section className="space-y-10">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand/70">
-            Admin Console
-          </p>
-          <h1 className="text-3xl font-bold text-contrast sm:text-4xl">Admin</h1>
-        </div>
-        <div className="rounded-2xl border border-accent-3/60 bg-accent-2/70 px-4 py-3 text-sm text-contrast/70 shadow-sm">
-          {isLoading ? "Syncing menu..." : `${items.length} menu items`}
-        </div>
-      </header>
+      <div className="rounded-2xl border border-accent-3/60 bg-accent-2/70 px-4 py-3 text-sm text-contrast/70 shadow-sm">
+        {isLoading ? "Syncing menu..." : `${items.length} menu items`}
+      </div>
       {error ? (
         <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">
           {error}

@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { toast } from "react-toastify";
 import { useOrders } from "../features/orders/OrdersContext";
 import { useSessions } from "../features/sessions/SessionsContext";
 
@@ -97,17 +98,9 @@ const Bills = () => {
 
   return (
     <section className="space-y-10">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand/70">
-            Open Bills
-          </p>
-          <h1 className="text-3xl font-bold text-contrast sm:text-4xl">Bills</h1>
-        </div>
-        <div className="rounded-2xl border border-accent-3/60 bg-accent-2/70 px-4 py-3 text-sm text-contrast/70 shadow-sm">
-          {isLoading ? "Syncing bills..." : `${billGroups.length} open bills`}
-        </div>
-      </header>
+      <div className="rounded-2xl border border-accent-3/60 bg-accent-2/70 px-4 py-3 text-sm text-contrast/70 shadow-sm">
+        {isLoading ? "Syncing bills..." : `${billGroups.length} open bills`}
+      </div>
 
       {error ? (
         <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">
@@ -313,7 +306,12 @@ const Bills = () => {
                     type="button"
                     onClick={async () => {
                       if (!selectedGroup?.sessionId) return;
-                      await closeSession(selectedGroup.sessionId);
+                      const result = await closeSession(selectedGroup.sessionId);
+                      if (!result.ok) {
+                        toast(result.error ?? "Unable to close bill.", { type: "error" });
+                        return;
+                      }
+                      toast("Bill closed.", { type: "success" });
                       setConfirmClose(false);
                       setSelectedBill(null);
                     }}

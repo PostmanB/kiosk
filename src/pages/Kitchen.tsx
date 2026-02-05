@@ -1,4 +1,5 @@
 ﻿import { useMemo, useState } from "react";
+import { toast } from "react-toastify";
 import { useOrders } from "../features/orders/OrdersContext";
 
 const statusStyles: Record<"new" | "served", string> = {
@@ -36,36 +37,32 @@ const Kitchen = () => {
     [orders]
   );
 
+  const handleMarkServed = async (orderId: string) => {
+    await updateStatus(orderId, "served");
+    toast("Marked as served.", { type: "success" });
+  };
+
   return (
     <section className="space-y-10">
-      <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-        <div>
-          <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand/70">
-            Kitchen Display
-          </p>
-          <h1 className="text-3xl font-bold text-contrast sm:text-4xl">Kitchen</h1>
-          
-        </div>
-        <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap gap-3">
+        <button
+          type="button"
+          onClick={() => setShowServed((prev) => !prev)}
+          className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+        >
+          {showServed ? "Hide served" : `Show served (${groupedOrders.served.length})`}
+        </button>
+        {showServed ? (
           <button
             type="button"
-            onClick={() => setShowServed((prev) => !prev)}
-            className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+            onClick={clearServed}
+            disabled={isLoading || groupedOrders.served.length === 0}
+            className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand disabled:cursor-not-allowed disabled:opacity-60"
           >
-            {showServed ? "Hide served" : `Show served (${groupedOrders.served.length})`}
+            Clear served
           </button>
-          {showServed ? (
-            <button
-              type="button"
-              onClick={clearServed}
-              disabled={isLoading || groupedOrders.served.length === 0}
-              className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand disabled:cursor-not-allowed disabled:opacity-60"
-            >
-              Clear served
-            </button>
-          ) : null}
-        </div>
-      </header>
+        ) : null}
+      </div>
 
       {error ? (
         <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">
@@ -117,6 +114,13 @@ const Kitchen = () => {
                       key={order.id}
                       className="flex w-[320px] flex-shrink-0 flex-col gap-4 rounded-3xl border-2 border-dashed border-accent-3/60 bg-primary/80 p-5 text-sm text-contrast shadow-lg shadow-accent-4/20"
                     >
+                      <button
+                        type="button"
+                        onClick={() => handleMarkServed(order.id)}
+                        className="w-full rounded-full bg-brand px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow shadow-brand/40 transition hover:-translate-y-0.5"
+                      >
+                        Mark served
+                      </button>
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-lg font-semibold">{formatBillLabel(order.table)}</p>
@@ -178,13 +182,6 @@ const Kitchen = () => {
                           })
                         )}
                       </ul>
-                      <button
-                        type="button"
-                        onClick={() => updateStatus(order.id, "served")}
-                        className="mt-auto rounded-full bg-brand px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow shadow-brand/40 transition hover:-translate-y-0.5"
-                      >
-                        Mark served
-                      </button>
                     </article>
                   );
                 })}

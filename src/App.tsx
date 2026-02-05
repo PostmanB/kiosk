@@ -20,7 +20,7 @@ function App() {
           <SessionsProvider>
             <div className="min-h-screen bg-primary text-contrast transition-colors duration-300">
               <Navbar />
-              <main className="w-full px-4 py-12">
+              <main className="w-full px-4 pt-6 pb-12">
                 <AppRoutes />
               </main>
               <VirtualKeyboard />
