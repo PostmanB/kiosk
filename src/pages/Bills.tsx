@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { toast } from "react-toastify";
 import { useOrders } from "../features/orders/OrdersContext";
 import { useSessions } from "../features/sessions/SessionsContext";
+import useLockBodyScroll from "../hooks/useLockBodyScroll";
 
 type SummaryLine = {
   name: string;
@@ -57,6 +59,7 @@ const Bills = () => {
   const { sessions, closeSession } = useSessions();
   const [selectedBill, setSelectedBill] = useState<string | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
+  const portalTarget = typeof document !== "undefined" ? document.body : null;
 
   const billGroups = useMemo(() => {
     const openSessions = sessions.filter((session) => session.status === "open");
@@ -91,6 +94,7 @@ const Bills = () => {
   }, [billGroups]);
 
   const selectedGroup = selectedBill ? billMap.get(selectedBill) : null;
+  useLockBodyScroll(Boolean(selectedGroup));
   const summaryLines = useMemo(() => {
     if (!selectedGroup) return [];
     return buildSummaryLines(
@@ -190,8 +194,9 @@ const Bills = () => {
         </div>
       )}
 
-      {selectedGroup ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary/70 backdrop-blur p-4">
+      {selectedGroup && portalTarget
+        ? createPortal(
+            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4">
           <button
             type="button"
             aria-label="Close"
@@ -346,8 +351,10 @@ const Bills = () => {
               </div>
             </div>
           </div>
-        </div>
-      ) : null}
+        </div>,
+            portalTarget
+          )
+        : null}
     </section>
   );
 };

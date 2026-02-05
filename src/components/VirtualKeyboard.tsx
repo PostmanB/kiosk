@@ -138,6 +138,14 @@ const VirtualKeyboard = () => {
 
     const handleFocusOut = () => {
       window.setTimeout(() => {
+        const keyboardActive =
+          keyboardRef.current && keyboardRef.current.contains(document.activeElement);
+        if (keyboardActive) {
+          if (activeRef.current) {
+            activeRef.current.focus();
+          }
+          return;
+        }
         const active = isTextTarget(document.activeElement);
         if (active) {
           activeRef.current = active;
@@ -159,6 +167,17 @@ const VirtualKeyboard = () => {
       if (isTextTarget(target)) return;
       setIsOpen(false);
       activeRef.current = null;
+    };
+
+    const handleWindowFocusIn = (event: FocusEvent) => {
+      const target = event.target as HTMLElement | null;
+      if (target && keyboardRef.current?.contains(target)) {
+        if (activeRef.current) {
+          window.setTimeout(() => {
+            activeRef.current?.focus();
+          }, 0);
+        }
+      }
     };
 
     const handleKeyDown = (event: KeyboardEvent) => {
@@ -187,6 +206,7 @@ const VirtualKeyboard = () => {
     document.addEventListener("pointerup", handlePointerUp);
     document.addEventListener("pointercancel", handlePointerUp);
     document.addEventListener("input", handleInput);
+    window.addEventListener("focusin", handleWindowFocusIn);
 
     return () => {
       if (repeatTimeoutRef.current) {
@@ -202,6 +222,7 @@ const VirtualKeyboard = () => {
       document.removeEventListener("pointerup", handlePointerUp);
       document.removeEventListener("pointercancel", handlePointerUp);
       document.removeEventListener("input", handleInput);
+      window.removeEventListener("focusin", handleWindowFocusIn);
     };
   }, []);
 
@@ -215,6 +236,13 @@ const VirtualKeyboard = () => {
       repeatIntervalRef.current = null;
     }
     repeatKeyRef.current = null;
+  };
+
+  const closeKeyboard = () => {
+    window.setTimeout(() => {
+      setIsOpen(false);
+      activeRef.current = null;
+    }, 0);
   };
 
   const handleKeyPress = (key: string) => {
@@ -236,17 +264,17 @@ const VirtualKeyboard = () => {
       clearText(target);
       return;
     }
-    if (key === "done") {
-      setIsOpen(false);
-      activeRef.current = null;
-      return;
-    }
     const output = shift ? key.toUpperCase() : key;
     insertText(target, output);
     if (shift) setShift(false);
   };
 
-  const handlePressStart = (key: string) => {
+  const handlePressStart = (key: string, event?: React.PointerEvent) => {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
+    if (key === "done") return;
     handleKeyPress(key);
     if (key !== "backspace") return;
     stopRepeat();
@@ -260,14 +288,18 @@ const VirtualKeyboard = () => {
     }, 350);
   };
 
-  const handlePressEnd = () => {
+  const handlePressEnd = (event?: React.PointerEvent) => {
+    if (event) {
+      event.preventDefault();
+      event.stopPropagation();
+    }
     stopRepeat();
   };
 
   if (!isOpen) return null;
 
   return (
-    <div className="fixed inset-x-0 bottom-0 z-[70] px-4 pb-4">
+    <div className="fixed inset-x-0 bottom-0 z-[90] px-4 pb-4">
       <div
         ref={keyboardRef}
         className="mx-auto w-full max-w-5xl rounded-3xl border border-accent-3/60 bg-primary/95 p-4 shadow-2xl backdrop-blur"
@@ -286,9 +318,10 @@ const VirtualKeyboard = () => {
           </span>
           <button
             type="button"
-            onPointerDown={(event) => {
+            onClick={(event) => {
               event.preventDefault();
-              handleKeyPress("done");
+              event.stopPropagation();
+              closeKeyboard();
             }}
             className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
           >
@@ -332,13 +365,18 @@ const VirtualKeyboard = () => {
                     key={key}
                     type="button"
                     onPointerDown={(event) => {
-                      event.preventDefault();
-                      handlePressStart(key);
+                      handlePressStart(key, event);
                     }}
                     onPointerUp={handlePressEnd}
                     onPointerLeave={handlePressEnd}
                     onPointerCancel={handlePressEnd}
                     onContextMenu={(event) => event.preventDefault()}
+                    onClick={(event) => {
+                      if (key !== "done") return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      closeKeyboard();
+                    }}
                     className={`rounded-2xl border px-3 py-3 text-sm font-semibold shadow-sm transition active:scale-[0.98] ${widthClass} ${
                       isShiftActive
                         ? "border-brand/60 bg-brand/15 text-brand"

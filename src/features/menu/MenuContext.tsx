@@ -54,6 +54,7 @@ type MenuContextValue = {
   addCategory: (name: string) => Promise<{ ok: boolean; error?: string }>;
   deleteCategory: (id: string) => Promise<{ ok: boolean; error?: string }>;
   addSauce: (name: string) => Promise<{ ok: boolean; error?: string }>;
+  deleteSauce: (id: string) => Promise<{ ok: boolean; error?: string }>;
   addSide: (name: string) => Promise<{ ok: boolean; error?: string }>;
   addItem: (input: AddItemInput) => Promise<{ ok: boolean; error?: string }>;
   updateCategory: (id: string, name: string) => Promise<{ ok: boolean; error?: string }>;
@@ -186,6 +187,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
         setError(deleteError.message);
         return { ok: false, error: deleteError.message };
       }
+      setCategories((prev) => prev.filter((category) => category.id !== id));
       setError(null);
       await refresh();
       return { ok: true };
@@ -204,6 +206,21 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
         setError(insertError.message);
         return { ok: false, error: insertError.message };
       }
+      setError(null);
+      await refresh();
+      return { ok: true };
+    },
+    [refresh]
+  );
+
+  const deleteSauce = useCallback(
+    async (id: string) => {
+      const { error: deleteError } = await supabase.from(TABLES.sauces).delete().eq("id", id);
+      if (deleteError) {
+        setError(deleteError.message);
+        return { ok: false, error: deleteError.message };
+      }
+      setSauces((prev) => prev.filter((sauce) => sauce.id !== id));
       setError(null);
       await refresh();
       return { ok: true };
@@ -397,6 +414,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
       addCategory,
       deleteCategory,
       addSauce,
+      deleteSauce,
       addSide,
       addItem,
       updateCategory,
@@ -416,6 +434,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
       addCategory,
       deleteCategory,
       addSauce,
+      deleteSauce,
       addSide,
       addItem,
       updateCategory,

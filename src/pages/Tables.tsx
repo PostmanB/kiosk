@@ -1,4 +1,5 @@
 import { useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { useOrders } from "../features/orders/OrdersContext";
 import { useSessions } from "../features/sessions/SessionsContext";
 
@@ -18,6 +19,7 @@ const Tables = () => {
   const { orders, isLoading, error } = useOrders();
   const { sessions, closeSession } = useSessions();
   const [selectedTable, setSelectedTable] = useState<string | null>(null);
+  const portalTarget = typeof document !== "undefined" ? document.body : null;
 
   const tableLayout = useMemo(
     () => [
@@ -172,8 +174,9 @@ const Tables = () => {
         </div>
       </div>
 
-      {selectedGroup ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary/70 backdrop-blur p-4">
+      {selectedGroup && portalTarget
+        ? createPortal(
+            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4">
           <button
             type="button"
             aria-label="Close"
@@ -295,8 +298,10 @@ const Tables = () => {
               </aside>
             </div>
           </div>
-        </div>
-      ) : null}
+        </div>,
+            portalTarget
+          )
+        : null}
     </section>
   );
 };

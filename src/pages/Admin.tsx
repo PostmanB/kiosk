@@ -1,7 +1,9 @@
 ﻿import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "@iconify/react";
 import { useMenu } from "../features/menu/MenuContext";
 import type { MenuItem } from "../features/menu/MenuContext";
+import useLockBodyScroll from "../hooks/useLockBodyScroll";
 type ModalState =
   | { mode: "add"; type: "category" | "sauce" | "side" | "item" }
   | { mode: "edit-list"; type: "category" | "sauce" | "side" }
@@ -54,6 +56,7 @@ const Admin = () => {
     updateSide,
     updateItem,
     deleteItem,
+    deleteSauce,
   } = useMenu();
   const [modal, setModal] = useState<ModalState>(null);
   const [modalFeedback, setModalFeedback] = useState<string | null>(null);
@@ -71,6 +74,8 @@ const Admin = () => {
   const [itemIsActive, setItemIsActive] = useState(true);
   const [confirmDeleteItem, setConfirmDeleteItem] = useState(false);
   const [confirmDeleteCategoryId, setConfirmDeleteCategoryId] = useState<string | null>(null);
+  useLockBodyScroll(Boolean(modal) || isIconModalOpen);
+  const portalTarget = typeof document !== "undefined" ? document.body : null;
   const [categoryEdits, setCategoryEdits] = useState<Record<string, string>>({});
   const [sauceEdits, setSauceEdits] = useState<Record<string, string>>({});
   const [sideEdits, setSideEdits] = useState<Record<string, string>>({});
@@ -273,7 +278,7 @@ const Admin = () => {
       type === "category" ? setCategoryEdits : type === "sauce" ? setSauceEdits : setSideEdits;
     const saveHandler =
       type === "category" ? handleUpdateCategory : type === "sauce" ? handleUpdateSauce : handleUpdateSide;
-    const canDelete = type === "category";
+    const canDelete = type === "category" || type === "sauce";
     return (
       <div className="space-y-3">
         <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-accent-3/60 bg-primary/60 p-4 sm:flex-row sm:items-center">
@@ -324,24 +329,35 @@ const Admin = () => {
                 </button>
                 {canDelete ? (
                   (() => {
-                    const count = categoryItemCounts.get(entry.id) ?? 0;
-                    const isDefault =
-                      ["sides", "drinks"].includes(entry.name.trim().toLowerCase());
-                    if (count > 0 || isDefault) {
-                      return (
-                        <span className="text-[11px] text-contrast/50">
-                          {isDefault ? "Default" : `${count} items`}
-                        </span>
-                      );
+                    if (type === "category") {
+                      const count = categoryItemCounts.get(entry.id) ?? 0;
+                      const isDefault =
+                        ["sides", "drinks"].includes(entry.name.trim().toLowerCase());
+                      if (count > 0 || isDefault) {
+                        return (
+                          <span className="text-[11px] text-contrast/50">
+                            {isDefault ? "Default" : `${count} items`}
+                          </span>
+                        );
+                      }
                     }
+
                     if (confirmDeleteCategoryId === entry.id) {
+                      const label = type === "category" ? "Category" : "Sauce";
                       return (
                         <button
                           type="button"
                           onClick={async () => {
-                            const result = await deleteCategory(entry.id);
+                            const result =
+                              type === "category"
+                                ? await deleteCategory(entry.id)
+                                : await deleteSauce(entry.id);
                             setConfirmDeleteCategoryId(null);
-                            setModalFeedback(result.ok ? "Category deleted." : result.error ?? "Unable to delete.");
+                            setModalFeedback(
+                              result.ok
+                                ? `${label} deleted.`
+                                : result.error ?? `Unable to delete ${label.toLowerCase()}.`
+                            );
                           }}
                           className="rounded-full border border-rose-400/70 bg-rose-500/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-rose-300 transition hover:border-rose-300 hover:text-rose-200"
                         >
@@ -350,13 +366,13 @@ const Admin = () => {
                       );
                     }
                     return (
-                        <button
-                          type="button"
-                          onClick={() => setConfirmDeleteCategoryId(entry.id)}
-                          className="rounded-full border border-rose-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-rose-300 transition hover:border-rose-300 hover:text-rose-200"
-                        >
-                          Delete
-                        </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfirmDeleteCategoryId(entry.id)}
+                        className="rounded-full border border-rose-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-rose-300 transition hover:border-rose-300 hover:text-rose-200"
+                      >
+                        Delete
+                      </button>
                     );
                   })()
                 ) : null}
@@ -461,10 +477,11 @@ const Admin = () => {
           </div>
         )}
       </div>
-      {modal ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary/70 backdrop-blur p-4">
+      {modal && portalTarget
+        ? createPortal(
+            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4">
           <button type="button" aria-label="Close" className="absolute inset-0" onClick={closeModal} />
-          <div className="relative z-10 w-full max-w-xl rounded-3xl border border-accent-3/60 bg-primary p-6 shadow-2xl">
+          <div className="relative z-10 w-full max-h-[85vh] max-w-xl overflow-y-auto rounded-3xl border border-accent-3/60 bg-primary p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
@@ -659,14 +676,14 @@ const Admin = () => {
             </div>
           </div>
           {isIconModalOpen ? (
-            <div className="fixed inset-0 z-[60] flex items-center justify-center bg-primary/70 backdrop-blur p-4">
+            <div className="fixed inset-0 z-[90] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4">
               <button
                 type="button"
                 aria-label="Close icon picker"
                 className="absolute inset-0"
                 onClick={() => setIsIconModalOpen(false)}
               />
-              <div className="relative z-10 w-full max-w-3xl rounded-3xl border border-accent-3/60 bg-primary p-6 shadow-2xl">
+              <div className="relative z-10 w-full max-h-[85vh] max-w-3xl overflow-y-auto rounded-3xl border border-accent-3/60 bg-primary p-6 shadow-2xl">
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
@@ -708,8 +725,10 @@ const Admin = () => {
               </div>
             </div>
           ) : null}
-        </div>
-      ) : null}
+        </div>,
+            portalTarget
+          )
+        : null}
     </section>
   );
 };

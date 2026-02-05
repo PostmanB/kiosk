@@ -1,10 +1,12 @@
 ﻿import { useEffect, useMemo, useState } from "react";
+import { createPortal } from "react-dom";
 import { Icon } from "@iconify/react";
 import { useOrders } from "../features/orders/OrdersContext";
 import { useMenu } from "../features/menu/MenuContext";
 import { useSessions } from "../features/sessions/SessionsContext";
 import type { MenuItem } from "../features/menu/MenuContext";
 import { toast } from "react-toastify";
+import useLockBodyScroll from "../hooks/useLockBodyScroll";
 
 type MenuModifierGroup = {
   id: string;
@@ -134,6 +136,7 @@ const Cashier = () => {
   } = useMenu();
   const { sessions, createSession, closeSession } = useSessions();
   const takeawayLabel = "Takeaway";
+  const portalTarget = typeof document !== "undefined" ? document.body : null;
 
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [table, setTable] = useState(takeawayLabel);
@@ -286,6 +289,7 @@ const Cashier = () => {
   }, [tableGroups]);
 
   const billGroup = billTable ? tableGroupMap.get(billTable) : null;
+  useLockBodyScroll(Boolean(selectedItem) || Boolean(billGroup));
   const billSummaryLines = useMemo(() => {
     if (!billGroup) return [];
     return buildReviewLines(
@@ -864,31 +868,6 @@ const Cashier = () => {
                 >
                   Send to kitchen
                 </button>
-                {activeSessionId && billInputValue.trim() ? (
-                  <button
-                    type="button"
-                    onClick={async () => {
-                      const sendResult = await sendPendingItems(activeSessionId);
-                      if (!sendResult.ok) {
-                        notify(sendResult.error ?? "Unable to send items.", "error");
-                        return;
-                      }
-                      const closeResult = await closeSession(activeSessionId);
-                      if (!closeResult.ok) {
-                        notify(closeResult.error ?? "Unable to close bill.", "error");
-                        return;
-                      }
-                      setTable(takeawayLabel);
-                      setCartItems([]);
-                      notify(sendResult.skipped ? "Bill closed." : "Order sent and bill closed.", "success");
-                      setOrderStep(1);
-                      setActiveSessionId(null);
-                    }}
-                    className="inline-flex items-center justify-center rounded-full border border-amber-400/40 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300 hover:text-amber-50"
-                  >
-                    Close bill
-                  </button>
-                ) : null}
                 <button
                   type="button"
                   onClick={() => setOrderStep(1)}
@@ -915,15 +894,16 @@ const Cashier = () => {
         </aside>
       </div>
 
-      {selectedItem ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary/70 backdrop-blur p-4">
+      {selectedItem && portalTarget
+        ? createPortal(
+            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4">
           <button
             type="button"
             aria-label="Close"
             className="absolute inset-0"
             onClick={resetDetailPanel}
           />
-          <div className="relative z-10 w-full max-w-xl rounded-3xl border border-accent-3/60 bg-primary p-6 shadow-2xl">
+          <div className="relative z-10 w-full max-w-xl max-h-[85vh] overflow-y-auto rounded-3xl border border-accent-3/60 bg-primary p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div className="flex items-start gap-4">
                 <div className="flex h-12 w-12 items-center justify-center rounded-2xl border border-accent-3/60 bg-primary/60">
@@ -1029,11 +1009,14 @@ const Cashier = () => {
               </div>
             </div>
           </div>
-        </div>
-      ) : null}
+        </div>,
+            portalTarget
+          )
+        : null}
 
-      {billGroup ? (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-primary/70 backdrop-blur p-4">
+      {billGroup && portalTarget
+        ? createPortal(
+            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4">
           <button
             type="button"
             aria-label="Close"
@@ -1173,8 +1156,10 @@ const Cashier = () => {
               </aside>
             </div>
           </div>
-        </div>
-      ) : null}
+        </div>,
+            portalTarget
+          )
+        : null}
     </section>
   );
 };
