@@ -587,7 +587,7 @@ const Cashier = () => {
                     </h3>
                     <span className="text-xs text-contrast/50">All time</span>
                   </div>
-                  <div className="grid gap-3 sm:grid-cols-3 lg:grid-cols-5">
+                  <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
                     {topSellers.map((entry) => {
                       const canOpen = Boolean(entry.menuItem && entry.menuItem.is_active !== false);
                       return (
