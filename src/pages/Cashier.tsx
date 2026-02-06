@@ -136,12 +136,11 @@ const buildReviewLines = (items: { name: string; quantity: number; registerCode?
 };
 
 const Cashier = () => {
-  const { orders, addOrder, isLoading: ordersLoading, error: ordersError } = useOrders();
+  const { orders, addOrder, error: ordersError } = useOrders();
   const {
     categories,
     items,
     sauces,
-    isLoading: menuLoading,
     error: menuError,
   } = useMenu();
   const { sessions, createSession, closeSession } = useSessions();
@@ -486,29 +485,6 @@ const Cashier = () => {
     }
     setOrderStep(1);
     setActiveSessionId(null);
-  };
-
-  const sendPendingItems = async (sessionId: string) => {
-    if (cartItems.length === 0) {
-      return { ok: true, skipped: true };
-    }
-    const result = await addOrder({
-      table: resolvedTable,
-      sessionId,
-      items: cartItems.map((item) => ({
-        name: item.menuItem.name,
-        quantity: item.quantity,
-        modifiers: item.modifiers,
-        price:
-          item.menuItem.price +
-          (item.modifiers.Side?.[0] && item.modifiers.Side?.[0] !== "No side"
-            ? sidePriceByName.get(item.modifiers.Side[0]) ?? 0
-            : 0),
-        registerCode: item.menuItem.register_code ?? undefined,
-        showInKitchen: item.menuItem.show_in_kitchen,
-      })),
-    });
-    return { ok: result.ok, error: result.error };
   };
 
   return (

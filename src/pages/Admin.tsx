@@ -81,6 +81,7 @@ const Admin = () => {
   const [sideEdits, setSideEdits] = useState<Record<string, string>>({});
   const [rowFeedback, setRowFeedback] = useState<Record<string, string | null>>({});
   const [newEntry, setNewEntry] = useState({ category: "", sauce: "", side: "" });
+  const modalType = modal?.mode === "add" || modal?.mode === "edit-list" ? modal.type : null;
   const categoryMap = useMemo(
     () => new Map(categories.map((category) => [category.id, category.name])),
     [categories]
@@ -488,13 +489,13 @@ const Admin = () => {
                   {modal.mode === "add" ? "Add new" : "Edit"}
                 </p>
                 <h2 className="text-2xl font-semibold text-contrast">
-                  {modal.mode === "edit-list" && modal.type === "category" && "Categories"}
-                  {modal.mode === "edit-list" && modal.type === "sauce" && "Sauces"}
-                  {modal.mode === "edit-list" && modal.type === "side" && "Sides"}
-                  {modal.mode !== "edit-list" && modal.type === "category" && "Category"}
-                  {modal.mode !== "edit-list" && modal.type === "sauce" && "Sauce"}
-                  {modal.mode !== "edit-list" && modal.type === "side" && "Side"}
-                  {modal.mode !== "edit-list" && modal.type === "item" && "Menu item"}
+                  {modal.mode === "edit-list" && modalType === "category" && "Categories"}
+                  {modal.mode === "edit-list" && modalType === "sauce" && "Sauces"}
+                  {modal.mode === "edit-list" && modalType === "side" && "Sides"}
+                  {modal.mode === "add" && modalType === "category" && "Category"}
+                  {modal.mode === "add" && modalType === "sauce" && "Sauce"}
+                  {modal.mode === "add" && modalType === "side" && "Side"}
+                  {modal.mode === "add" && modalType === "item" && "Menu item"}
                   {modal.mode === "edit-item" && "Menu item"}
                 </h2>
               </div>
