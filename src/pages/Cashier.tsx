@@ -7,6 +7,7 @@ import { useSessions } from "../features/sessions/SessionsContext";
 import type { MenuItem } from "../features/menu/MenuContext";
 import { toast } from "react-toastify";
 import useLockBodyScroll from "../hooks/useLockBodyScroll";
+import { printKitchenTicket } from "../lib/printing";
 
 type MenuModifierGroup = {
   id: string;
@@ -48,6 +49,15 @@ type ModifierLine = {
   text: string;
   isExtra: boolean;
 };
+
+const buildKitchenPrintItems = (items: CartItem[]) =>
+  items
+    .filter((item) => item.menuItem.show_in_kitchen !== false)
+    .map((item) => ({
+      name: item.menuItem.name,
+      quantity: item.quantity,
+      modifiers: item.modifiers,
+    }));
 
 const formatModifierLines = (modifiers?: Record<string, string[]>) => {
   if (!modifiers) return [];
@@ -440,6 +450,20 @@ const Cashier = () => {
     if (!result.ok) {
       notify(result.error ?? "Unable to send order right now.", "error");
       return;
+    }
+
+    const kitchenItems = buildKitchenPrintItems(cartItems);
+    if (kitchenItems.length > 0) {
+      const printResult = printKitchenTicket({
+        type: "kitchen",
+        table: tableName,
+        createdAt: new Date().toISOString(),
+        items: kitchenItems,
+        paperWidthMm: 58,
+      });
+      if (printResult.supported && !printResult.ok) {
+        toast("Kitchen printer not responding. Check Bluetooth.", { type: "error" });
+      }
     }
 
     let closeError: string | null = null;

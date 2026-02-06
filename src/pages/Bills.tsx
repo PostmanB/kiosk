@@ -4,6 +4,7 @@ import { toast } from "react-toastify";
 import { useOrders } from "../features/orders/OrdersContext";
 import { useSessions } from "../features/sessions/SessionsContext";
 import useLockBodyScroll from "../hooks/useLockBodyScroll";
+import { isAndroidPrinterAvailable, printBill } from "../lib/printing";
 
 type SummaryLine = {
   name: string;
@@ -60,6 +61,7 @@ const Bills = () => {
   const [selectedBill, setSelectedBill] = useState<string | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
   const portalTarget = typeof document !== "undefined" ? document.body : null;
+  const canPrint = isAndroidPrinterAvailable();
 
   const billGroups = useMemo(() => {
     const openSessions = sessions.filter((session) => session.status === "open");
@@ -109,6 +111,28 @@ const Bills = () => {
   useEffect(() => {
     setConfirmClose(false);
   }, [selectedGroup?.sessionId]);
+
+  const handlePrintBill = () => {
+    if (!selectedGroup) return;
+    const printResult = printBill({
+      type: "bill",
+      table: selectedGroup.bill,
+      openedAt: selectedGroup.openedAt,
+      items: selectedGroup.items.map((item) => ({
+        name: item.name,
+        quantity: item.quantity,
+        price: typeof item.price === "number" ? item.price : undefined,
+        modifiers: item.modifiers,
+        registerCode: item.registerCode ?? null,
+      })),
+      total: selectedGroup.showTotal ? selectedGroup.total : undefined,
+      currency: "EUR",
+      paperWidthMm: 58,
+    });
+    if (printResult.supported && !printResult.ok) {
+      toast("Bill printer not responding. Check Bluetooth.", { type: "error" });
+    }
+  };
 
   return (
     <section className="space-y-10">
@@ -218,13 +242,24 @@ const Bills = () => {
                   {formatTime(selectedGroup.openedAt)}
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setSelectedBill(null)}
-                className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
-              >
-                Close
-              </button>
+              <div className="flex flex-wrap gap-2">
+                {canPrint ? (
+                  <button
+                    type="button"
+                    onClick={handlePrintBill}
+                    className="rounded-full bg-brand px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5"
+                  >
+                    Print bill
+                  </button>
+                ) : null}
+                <button
+                  type="button"
+                  onClick={() => setSelectedBill(null)}
+                  className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                >
+                  Close
+                </button>
+              </div>
             </div>
 
             <div className="mt-6 grid flex-1 min-h-0 gap-6 overflow-hidden lg:grid-cols-[1.2fr_0.8fr]">
