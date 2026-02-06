@@ -7,4 +7,4 @@ services:
       VITE_KIOSK_PIN: ${VITE_KIOSK_PIN}
       VITE_STATS_PIN: ${VITE_STATS_PIN}
     ports:
-      - "8080:80"
+      - "9999:80"
