@@ -35,9 +35,25 @@ export type PrintResult = {
   ok: boolean;
 };
 
+export type PrinterState =
+  | "connected"
+  | "connecting"
+  | "retrying"
+  | "disconnected"
+  | "error"
+  | "idle"
+  | "unknown";
+
+export type PrinterStatus = {
+  state: PrinterState;
+  message?: string;
+  updatedAt?: number;
+};
+
 type AndroidPrinterBridge = {
   printKitchenTicket?: (payloadJson: string) => void;
   printBill?: (payloadJson: string) => void;
+  getStatus?: () => string;
 };
 
 const getAndroidPrinter = (): AndroidPrinterBridge | null => {
@@ -48,7 +64,31 @@ const getAndroidPrinter = (): AndroidPrinterBridge | null => {
 
 export const isAndroidPrinterAvailable = () => {
   const printer = getAndroidPrinter();
-  return Boolean(printer?.printKitchenTicket || printer?.printBill);
+  return Boolean(printer?.printKitchenTicket || printer?.printBill || printer?.getStatus);
+};
+
+export const getPrinterStatus = (): PrinterStatus | null => {
+  const printer = getAndroidPrinter();
+  const handler = printer?.getStatus;
+  if (!printer || typeof handler !== "function") {
+    return null;
+  }
+  try {
+    const raw = handler();
+    if (!raw) return { state: "unknown" };
+    const data = JSON.parse(raw) as Partial<PrinterStatus> | null;
+    if (!data || typeof data.state !== "string") {
+      return { state: "unknown" };
+    }
+    return {
+      state: data.state as PrinterState,
+      message: data.message,
+      updatedAt: data.updatedAt,
+    };
+  } catch (error) {
+    console.warn("[print] getStatus failed", error);
+    return { state: "unknown" };
+  }
 };
 
 const callAndroidPrinter = (

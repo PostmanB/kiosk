@@ -1,12 +1,10 @@
-package com.kiosk.printbridge
+﻿package com.kiosk.printbridge
 
-import android.content.Context
 import android.util.Log
 import android.webkit.JavascriptInterface
 import java.util.concurrent.Executors
 
-class PrinterBridge(context: Context) {
-  private val appContext = context.applicationContext
+class PrinterBridge {
   private val executor = Executors.newSingleThreadExecutor()
 
   private val printerMac = "AA:BB:CC:DD:EE:FF"
@@ -16,7 +14,7 @@ class PrinterBridge(context: Context) {
     executor.execute {
       try {
         val data = EscPosFormatter.kitchenTicket(payloadJson)
-        BluetoothPrinter.print(appContext, printerMac, data)
+        BluetoothPrinter.print(printerMac, data)
       } catch (error: Exception) {
         Log.e("PrinterBridge", "Kitchen print failed", error)
       }
@@ -28,10 +26,15 @@ class PrinterBridge(context: Context) {
     executor.execute {
       try {
         val data = EscPosFormatter.bill(payloadJson)
-        BluetoothPrinter.print(appContext, printerMac, data)
+        BluetoothPrinter.print(printerMac, data)
       } catch (error: Exception) {
         Log.e("PrinterBridge", "Bill print failed", error)
       }
     }
+  }
+
+  @JavascriptInterface
+  fun getStatus(): String {
+    return BluetoothPrinter.getStatusJson()
   }
 }

@@ -31,6 +31,7 @@ At runtime, the app requests `BLUETOOTH_CONNECT` and `BLUETOOTH_SCAN` on Android
 The website calls these methods:
 - `window.AndroidPrinter.printKitchenTicket(payloadJson)`
 - `window.AndroidPrinter.printBill(payloadJson)`
+- `window.AndroidPrinter.getStatus()` -> JSON string
 
 ## Payload Shapes
 Kitchen ticket:
