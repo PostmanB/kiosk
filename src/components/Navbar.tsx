@@ -1,8 +1,9 @@
-import { useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Link, NavLink } from "react-router-dom";
 import { FiLock, FiMenu, FiX } from "react-icons/fi";
 import ThemeToggle from "./ui/ThemeToggle";
 import { PIN_UNLOCK_KEY } from "../features/pin/PinGate";
+import { getPrinterStatus, isAndroidPrinterAvailable, type PrinterStatus } from "../lib/printing";
 
 const navLinks = [
   { to: "/cashier", label: "Cashier" },
@@ -14,6 +15,7 @@ const navLinks = [
 
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
+  const [printerStatus, setPrinterStatus] = useState<PrinterStatus | null>(null);
   const handleLock = () => {
     localStorage.removeItem(PIN_UNLOCK_KEY);
     window.location.reload();
@@ -34,6 +36,37 @@ const Navbar = () => {
     ]
       .filter(Boolean)
       .join(" ");
+
+  useEffect(() => {
+    if (!isAndroidPrinterAvailable()) return;
+    const poll = () => {
+      const status = getPrinterStatus();
+      setPrinterStatus(status ?? { state: "unknown" });
+    };
+    poll();
+    const intervalId = window.setInterval(poll, 3000);
+    return () => window.clearInterval(intervalId);
+  }, []);
+
+  const printerIndicator = useMemo(() => {
+    if (!printerStatus) return null;
+    switch (printerStatus.state) {
+      case "connected":
+        return { label: "Printer connected", dotClass: "bg-emerald-400" };
+      case "connecting":
+        return { label: "Printer connecting", dotClass: "bg-amber-400 animate-pulse" };
+      case "retrying":
+        return { label: "Printer retrying", dotClass: "bg-amber-400 animate-pulse" };
+      case "idle":
+        return { label: "Printer idle", dotClass: "bg-slate-400" };
+      case "disconnected":
+        return { label: "Printer offline", dotClass: "bg-rose-400" };
+      case "error":
+        return { label: "Printer error", dotClass: "bg-rose-400" };
+      default:
+        return { label: "Printer unknown", dotClass: "bg-contrast/40" };
+    }
+  }, [printerStatus]);
 
   return (
     <>
@@ -58,6 +91,17 @@ const Navbar = () => {
             ))}
           </div>
           <div className="flex items-center gap-3">
+            {printerIndicator ? (
+              <div
+                className="flex items-center gap-1"
+                aria-label={printerIndicator.label}
+                title={printerIndicator.label}
+              >
+                <span className={`h-2 w-2 rounded-full ${printerIndicator.dotClass}`} />
+                <span className={`h-2 w-2 rounded-full ${printerIndicator.dotClass}`} />
+                <span className={`h-2 w-2 rounded-full ${printerIndicator.dotClass}`} />
+              </div>
+            ) : null}
             <ThemeToggle />
             <button
               type="button"

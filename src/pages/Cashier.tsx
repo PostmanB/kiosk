@@ -7,12 +7,7 @@ import { useSessions } from "../features/sessions/SessionsContext";
 import type { MenuItem } from "../features/menu/MenuContext";
 import { toast } from "react-toastify";
 import useLockBodyScroll from "../hooks/useLockBodyScroll";
-import {
-  getPrinterStatus,
-  isAndroidPrinterAvailable,
-  printKitchenTicket,
-  type PrinterStatus,
-} from "../lib/printing";
+import { printKitchenTicket } from "../lib/printing";
 
 type MenuModifierGroup = {
   id: string;
@@ -162,7 +157,6 @@ const Cashier = () => {
   const [selectedQty, setSelectedQty] = useState(1);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [orderStep, setOrderStep] = useState<1 | 2 | 3>(1);
-  const [printerStatus, setPrinterStatus] = useState<PrinterStatus | null>(null);
   const resolvedTable = table.trim() || takeawayLabel;
   const billInputValue = table === takeawayLabel ? "" : table;
 
@@ -333,57 +327,6 @@ const Cashier = () => {
     }
   }, [activeCategoryId, categories]);
 
-  useEffect(() => {
-    if (!isAndroidPrinterAvailable()) return;
-    const poll = () => {
-      const status = getPrinterStatus();
-      setPrinterStatus(status ?? { state: "unknown" });
-    };
-    poll();
-    const intervalId = window.setInterval(poll, 3000);
-    return () => window.clearInterval(intervalId);
-  }, []);
-
-  const printerBadge = useMemo(() => {
-    if (!printerStatus) return null;
-    switch (printerStatus.state) {
-      case "connected":
-        return {
-          label: "Printer connected",
-          className: "border-emerald-400/50 bg-emerald-500/15 text-emerald-200",
-        };
-      case "connecting":
-        return {
-          label: "Printer connecting",
-          className: "border-amber-400/60 bg-amber-500/10 text-amber-200",
-        };
-      case "retrying":
-        return {
-          label: "Printer retrying",
-          className: "border-amber-400/60 bg-amber-500/10 text-amber-200",
-        };
-      case "idle":
-        return {
-          label: "Printer idle",
-          className: "border-slate-400/50 bg-slate-500/10 text-slate-200",
-        };
-      case "disconnected":
-        return {
-          label: "Printer offline",
-          className: "border-rose-400/60 bg-rose-500/10 text-rose-200",
-        };
-      case "error":
-        return {
-          label: "Printer error",
-          className: "border-rose-400/60 bg-rose-500/10 text-rose-200",
-        };
-      default:
-        return {
-          label: "Printer unknown",
-          className: "border-slate-400/50 bg-slate-500/10 text-slate-200",
-        };
-    }
-  }, [printerStatus]);
 
   const resetDetailPanel = () => {
     setSelectedItem(null);
@@ -566,13 +509,6 @@ const Cashier = () => {
       <div className="flex flex-wrap gap-3 rounded-3xl border border-accent-3/60 bg-accent-1/70 p-4 text-xs font-semibold uppercase tracking-[0.2em] text-contrast/70">
         <span className={orderStep === 1 ? "text-brand" : ""}>1. Items</span>
         <span className={orderStep === 2 ? "text-brand" : ""}>2. Bill & Send</span>
-        {printerBadge ? (
-          <span
-            className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${printerBadge.className}`}
-          >
-            {printerBadge.label}
-          </span>
-        ) : null}
       </div>
 
       <div className="grid gap-8 lg:grid-cols-[1.4fr_0.6fr]">
