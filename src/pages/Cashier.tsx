@@ -87,7 +87,7 @@ const buildModifierGroups = (
     groups.push({
       id: "Sauce",
       label: "Sauce",
-      type: "single",
+      type: "multi",
       options: ["No sauce", ...sauces.map((sauce) => sauce.name)],
     });
   }
@@ -359,6 +359,16 @@ const Cashier = () => {
       const existing = prev[group.label] ?? [];
       if (group.type === "single") {
         return { ...prev, [group.label]: [option] };
+      }
+      if (group.label === "Sauce") {
+        if (option === "No sauce") {
+          return { ...prev, [group.label]: ["No sauce"] };
+        }
+        const withoutNoSauce = existing.filter((value) => value !== "No sauce");
+        const next = withoutNoSauce.includes(option)
+          ? withoutNoSauce.filter((value) => value !== option)
+          : [...withoutNoSauce, option];
+        return { ...prev, [group.label]: next };
       }
       const next = existing.includes(option)
         ? existing.filter((value) => value !== option)
