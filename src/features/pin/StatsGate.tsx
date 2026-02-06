@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { readEnv } from "../../lib/runtimeEnv";
 
 type StatsGateProps = {
   children: React.ReactNode;
@@ -19,7 +20,7 @@ const getStoredUnlockUntil = () => {
 
 const StatsGate = ({ children }: StatsGateProps) => {
   const configuredPin = useMemo(() => {
-    const raw = import.meta.env.VITE_STATS_PIN as string | undefined;
+    const raw = readEnv("VITE_STATS_PIN");
     return raw?.trim() ?? "";
   }, []);
   const requiredLength = configuredPin.length;
@@ -35,7 +36,7 @@ const StatsGate = ({ children }: StatsGateProps) => {
               </p>
               <h1 className="text-2xl font-semibold text-contrast">Set Stats PIN</h1>
               <p className="text-sm text-contrast/70">
-                Add `VITE_STATS_PIN` (4-8 digits) to `.env.local` to enable statistics access.
+                Provide `VITE_STATS_PIN` (4-8 digits) to enable statistics access.
               </p>
             </div>
           </div>
@@ -241,3 +242,6 @@ const StatsGate = ({ children }: StatsGateProps) => {
 };
 
 export default StatsGate;
+
+
+

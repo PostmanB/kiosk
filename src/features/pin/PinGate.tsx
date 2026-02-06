@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import { readEnv } from "../../lib/runtimeEnv";
 
 type PinGateProps = {
   children: React.ReactNode;
@@ -21,13 +22,13 @@ const normalizePin = (value: string) => value.replace(/\D/g, "").slice(0, 8);
 
 const PinGate = ({ children }: PinGateProps) => {
   const configuredPin = useMemo(() => {
-    const raw = import.meta.env.VITE_KIOSK_PIN as string | undefined;
+    const raw = readEnv("VITE_KIOSK_PIN");
     return raw?.trim() ?? "";
   }, []);
 
   if (!configuredPin) {
     throw new Error(
-      "Missing VITE_KIOSK_PIN. Add an 8-digit PIN to .env.local (VITE_KIOSK_PIN=12345678)."
+      "Missing VITE_KIOSK_PIN. Provide an 8-digit PIN."
     );
   }
 
@@ -210,3 +211,6 @@ const PinGate = ({ children }: PinGateProps) => {
 };
 
 export default PinGate;
+
+
+

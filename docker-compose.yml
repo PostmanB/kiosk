@@ -1,0 +1,10 @@
+services:
+  kiosk:
+    build: .
+    environment:
+      VITE_SUPABASE_URL: ${VITE_SUPABASE_URL}
+      VITE_SUPABASE_ANON_KEY: ${VITE_SUPABASE_ANON_KEY}
+      VITE_KIOSK_PIN: ${VITE_KIOSK_PIN}
+      VITE_STATS_PIN: ${VITE_STATS_PIN}
+    ports:
+      - "8080:80"
