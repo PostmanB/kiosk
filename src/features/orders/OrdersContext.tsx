@@ -162,12 +162,23 @@ export const OrdersProvider = ({ children }: { children: React.ReactNode }) => {
 
   const updateItemDone = useCallback(
     async (id: string, itemIndex: number, done: boolean) => {
-      const order = orders.find((current) => current.id === id);
-      if (!order) return;
+      let nextItems: OrderItem[] | null = null;
 
-      const nextItems = order.items.map((item, index) =>
-        index === itemIndex ? { ...item, done } : item
-      );
+      setOrders((prev) => {
+        const order = prev.find((current) => current.id === id);
+        if (!order) return prev;
+
+        const updatedItems = order.items.map((item, index) =>
+          index === itemIndex ? { ...item, done } : item
+        );
+        nextItems = updatedItems;
+
+        return prev.map((current) =>
+          current.id === id ? { ...current, items: updatedItems } : current
+        );
+      });
+
+      if (!nextItems) return;
 
       const { error: updateError } = await supabase
         .from(TABLE_NAME)
@@ -176,13 +187,13 @@ export const OrdersProvider = ({ children }: { children: React.ReactNode }) => {
 
       if (updateError) {
         setError(updateError.message);
+        await fetchOrders();
         return;
       }
 
       setError(null);
-      await fetchOrders();
     },
-    [orders, fetchOrders]
+    [fetchOrders]
   );
 
   const removeOrder = useCallback(async (id: string) => {
