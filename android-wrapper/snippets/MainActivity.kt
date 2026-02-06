@@ -1,4 +1,4 @@
-package com.kiosk.printbridge
+﻿package com.kiosk.printbridge
 
 import android.Manifest
 import android.annotation.SuppressLint
@@ -6,10 +6,10 @@ import android.os.Build
 import android.os.Bundle
 import android.webkit.WebView
 import android.webkit.WebViewClient
-import androidx.appcompat.app.AppCompatActivity
+import androidx.activity.ComponentActivity
 import androidx.core.app.ActivityCompat
 
-class MainActivity : AppCompatActivity() {
+class MainActivity : ComponentActivity() {
   private val kioskUrl = "https://your-kiosk-site.example.com"
 
   @SuppressLint("SetJavaScriptEnabled")
@@ -31,7 +31,7 @@ class MainActivity : AppCompatActivity() {
     webView.settings.javaScriptEnabled = true
     webView.settings.domStorageEnabled = true
     webView.webViewClient = WebViewClient()
-    webView.addJavascriptInterface(PrinterBridge(this), "AndroidPrinter")
+    webView.addJavascriptInterface(PrinterBridge(), "AndroidPrinter")
     webView.loadUrl(kioskUrl)
 
     setContentView(webView)
