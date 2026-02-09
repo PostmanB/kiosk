@@ -12,8 +12,35 @@ const formatCurrency = (value: number) => `EUR ${value.toFixed(2)}`;
 
 const formatTime = (value: string) =>
   new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const TAKEAWAY_VALUE = "Takeaway";
+const TAKEAWAY_LABEL = "Elvitel";
+const NO_SAUCE_VALUE = "No sauce";
+const NO_SIDE_VALUE = "No side";
+const MODIFIER_LABELS = {
+  Sauce: "Szósz",
+  Side: "Köret",
+  Extras: "Extrák",
+} as const;
+const MODIFIER_VALUE_LABELS = {
+  [NO_SAUCE_VALUE]: "Szósz nélkül",
+  [NO_SIDE_VALUE]: "Köret nélkül",
+} as const;
 
-const formatBillLabel = (value: string) => (value === "Takeaway" ? "Takeaway" : `Bill ${value}`);
+const formatModifierGroup = (group: string) =>
+  MODIFIER_LABELS[group as keyof typeof MODIFIER_LABELS] ?? group;
+const formatModifierValue = (value: string) =>
+  MODIFIER_VALUE_LABELS[value as keyof typeof MODIFIER_VALUE_LABELS] ?? value;
+const isExtraGroup = (group: string) => /extra|extrá/i.test(group);
+const isTakeaway = (value: string) => {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === TAKEAWAY_VALUE.toLowerCase() ||
+    normalized === TAKEAWAY_LABEL.toLowerCase()
+  );
+};
+
+const formatBillLabel = (value: string) =>
+  isTakeaway(value) ? TAKEAWAY_LABEL : `Számla ${value}`;
 
 type ModifierLine = {
   text: string;
@@ -25,10 +52,12 @@ const formatModifierLines = (modifiers?: Record<string, string[]>) => {
   return Object.entries(modifiers)
     .flatMap(([group, values]) => {
       if (!values || values.length === 0) return [];
+      const label = formatModifierGroup(group);
+      const displayValues = values.map((value) => formatModifierValue(value));
       return [
         {
-          text: `${group}: ${values.join(", ")}`,
-          isExtra: /extra/i.test(group),
+          text: `${label}: ${displayValues.join(", ")}`,
+          isExtra: isExtraGroup(group),
         },
       ];
     })
@@ -64,7 +93,7 @@ const Kitchen = () => {
 
   const handleMarkServed = async (orderId: string) => {
     await updateStatus(orderId, "served");
-    toast("Marked as served.", { type: "success" });
+    toast("Kiszolgáltnak jelölve.", { type: "success" });
   };
 
   return (
@@ -75,7 +104,9 @@ const Kitchen = () => {
           onClick={() => setShowServed((prev) => !prev)}
           className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
         >
-          {showServed ? "Hide served" : `Show served (${servedToday.length})`}
+          {showServed
+            ? "Kiszolgáltak elrejtése"
+            : `Kiszolgáltak megjelenítése (${servedToday.length})`}
         </button>
       </div>
 
@@ -88,19 +119,19 @@ const Kitchen = () => {
       <div className="space-y-8">
         <section className="rounded-3xl border border-accent-3/60 bg-accent-1/80 p-6 shadow-lg shadow-accent-4/20">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-contrast">New Orders</h2>
+            <h2 className="text-lg font-semibold text-contrast">Új rendelések</h2>
             <span
               className={`rounded-full border px-3 py-1 text-xs font-semibold uppercase tracking-wide ${
                 statusStyles.new
               }`}
             >
-              {groupedOrders.new.length} orders
+              {groupedOrders.new.length} rendelés
             </span>
           </div>
           <div className="mt-4 space-y-4">
             {groupedOrders.new.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-accent-3/60 bg-primary/70 p-4 text-sm text-contrast/60">
-                No new orders right now.
+                Jelenleg nincs új rendelés.
               </p>
             ) : (
               <div className="flex gap-4 overflow-x-auto pb-4">
@@ -134,13 +165,13 @@ const Kitchen = () => {
                         onClick={() => handleMarkServed(order.id)}
                         className="w-full rounded-full bg-brand px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow shadow-brand/40 transition hover:-translate-y-0.5"
                       >
-                        Mark served
+                        Kiszolgáltnak jelölés
                       </button>
                       <div className="flex items-start justify-between gap-3">
                         <div>
                           <p className="text-lg font-semibold">{formatBillLabel(order.table)}</p>
                           <p className="text-xs text-contrast/60">
-                            Placed {formatTime(order.createdAt)} • {doneCount}/{itemCount} done
+                            Feladva {formatTime(order.createdAt)} • {doneCount}/{itemCount} kész
                           </p>
                         </div>
                         {showTotal ? (
@@ -152,7 +183,7 @@ const Kitchen = () => {
                       <ul className="space-y-2 text-xs text-contrast/80">
                         {displayItems.length === 0 ? (
                           <li className="text-[11px] text-contrast/60">
-                            No kitchen items for this order.
+                            Ehhez a rendeléshez nincs konyhai tétel.
                           </li>
                         ) : (
                           displayItems.map(({ item, index }) => {
@@ -220,7 +251,7 @@ const Kitchen = () => {
             <div className="fixed inset-0 z-[80] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4">
               <button
                 type="button"
-                aria-label="Close served orders"
+                aria-label="Kiszolgált rendelések bezárása"
                 className="absolute inset-0"
                 onClick={() => setShowServed(false)}
               />
@@ -228,11 +259,11 @@ const Kitchen = () => {
                 <div className="flex flex-wrap items-start justify-between gap-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                      Served today
+                      Mai kiszolgáltak
                     </p>
-                    <h2 className="text-2xl font-semibold text-contrast">Served Orders</h2>
+                    <h2 className="text-2xl font-semibold text-contrast">Kiszolgált rendelések</h2>
                     <p className="mt-1 text-xs text-contrast/60">
-                      {servedToday.length} order{servedToday.length === 1 ? "" : "s"} served today.
+                      {servedToday.length} rendelés kiszolgálva ma.
                     </p>
                   </div>
                   <div className="flex flex-wrap gap-2">
@@ -241,7 +272,7 @@ const Kitchen = () => {
                       onClick={() => setShowServed(false)}
                       className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
                     >
-                      Close
+                      Bezárás
                     </button>
                   </div>
                 </div>
@@ -249,7 +280,7 @@ const Kitchen = () => {
                 <div className="mt-6 flex-1 min-h-0">
                   {servedToday.length === 0 ? (
                     <p className="rounded-2xl border border-dashed border-accent-3/60 bg-primary/70 p-4 text-sm text-contrast/60">
-                      No served orders today.
+                      Ma még nincs kiszolgált rendelés.
                     </p>
                   ) : (
                     <div className="flex gap-4 overflow-x-auto pb-4">
@@ -284,7 +315,7 @@ const Kitchen = () => {
                                   {formatBillLabel(order.table)}
                                 </p>
                                 <p className="text-xs text-contrast/60">
-                                  Served {formatTime(order.createdAt)} • {doneCount}/{itemCount} done
+                                  Kiszolgálva {formatTime(order.createdAt)} • {doneCount}/{itemCount} kész
                                 </p>
                               </div>
                               {showTotal ? (
@@ -296,7 +327,7 @@ const Kitchen = () => {
                             <ul className="space-y-2 text-xs text-contrast/80">
                               {displayItems.length === 0 ? (
                                 <li className="text-[11px] text-contrast/60">
-                                  No kitchen items for this order.
+                                  Ehhez a rendeléshez nincs konyhai tétel.
                                 </li>
                               ) : (
                                 displayItems.map(({ item, index }) => {
@@ -343,7 +374,7 @@ const Kitchen = () => {
                               onClick={() => removeOrder(order.id)}
                               className="mt-auto rounded-full border border-rose-500/40 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-rose-300 transition hover:bg-rose-500/10"
                             >
-                              Remove
+                              Eltávolítás
                             </button>
                           </article>
                         );

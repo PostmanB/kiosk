@@ -32,11 +32,11 @@ const StatsGate = ({ children }: StatsGateProps) => {
           <div className="rounded-3xl border border-accent-3/60 bg-accent-1/80 p-6 shadow-lg shadow-accent-4/20">
             <div className="space-y-2 text-center">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                Statistics Locked
+                Statisztika zárolva
               </p>
-              <h1 className="text-2xl font-semibold text-contrast">Set Stats PIN</h1>
+              <h1 className="text-2xl font-semibold text-contrast">Statisztikai PIN beállítása</h1>
               <p className="text-sm text-contrast/70">
-                Provide `VITE_STATS_PIN` (4-8 digits) to enable statistics access.
+                Adj meg `VITE_STATS_PIN`-t (4-8 jegy), hogy elérhető legyen a statisztika.
               </p>
             </div>
           </div>
@@ -52,11 +52,11 @@ const StatsGate = ({ children }: StatsGateProps) => {
           <div className="rounded-3xl border border-accent-3/60 bg-accent-1/80 p-6 shadow-lg shadow-accent-4/20">
             <div className="space-y-2 text-center">
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                Statistics Locked
+                Statisztika zárolva
               </p>
-              <h1 className="text-2xl font-semibold text-contrast">Invalid Stats PIN</h1>
+              <h1 className="text-2xl font-semibold text-contrast">Érvénytelen statisztikai PIN</h1>
               <p className="text-sm text-contrast/70">
-                `VITE_STATS_PIN` must be 4-8 digits.
+                A `VITE_STATS_PIN` 4-8 jegyű kell legyen.
               </p>
             </div>
           </div>
@@ -104,7 +104,7 @@ const StatsGate = ({ children }: StatsGateProps) => {
         clearTimeout(timeoutId);
       }
       timeoutId = setTimeout(() => {
-        lock("Session timed out. Enter the stats PIN again.");
+        lock("A munkamenet lejárt. Add meg újra a statisztikai PIN-t.");
       }, INACTIVITY_TIMEOUT_MS);
     };
 
@@ -138,7 +138,7 @@ const StatsGate = ({ children }: StatsGateProps) => {
 
   const handleVerify = () => {
     if (pinInput.length !== requiredLength) {
-      setError(`Enter the full ${requiredLength}-digit PIN.`);
+      setError(`Add meg a teljes ${requiredLength} jegyű PIN-t.`);
       return;
     }
 
@@ -151,7 +151,7 @@ const StatsGate = ({ children }: StatsGateProps) => {
       return;
     }
 
-    setError("Incorrect PIN. Try again.");
+    setError("Hibás PIN. Próbáld újra.");
     setPinInput("");
   };
 
@@ -165,11 +165,11 @@ const StatsGate = ({ children }: StatsGateProps) => {
         <div className="rounded-3xl border border-accent-3/60 bg-accent-1/80 p-6 shadow-lg shadow-accent-4/20">
           <div className="space-y-2 text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-              Statistics Locked
+              Statisztika zárolva
             </p>
-            <h1 className="text-2xl font-semibold text-contrast">Enter Stats PIN</h1>
+            <h1 className="text-2xl font-semibold text-contrast">Statisztikai PIN megadása</h1>
             <p className="text-sm text-contrast/70">
-              {requiredLength}-digit access code required.
+              {requiredLength} jegyű hozzáférési kód szükséges.
             </p>
           </div>
 
@@ -210,7 +210,7 @@ const StatsGate = ({ children }: StatsGateProps) => {
               className="rounded-2xl border border-accent-3/60 bg-accent-2/70 py-4 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/40 hover:text-brand"
               onClick={handleClear}
             >
-              Clear
+              Törlés
             </button>
             <button
               type="button"
@@ -224,7 +224,7 @@ const StatsGate = ({ children }: StatsGateProps) => {
               className="rounded-2xl border border-accent-3/60 bg-accent-2/70 py-4 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/40 hover:text-brand"
               onClick={handleBackspace}
             >
-              Back
+              Vissza
             </button>
           </div>
 
@@ -233,7 +233,7 @@ const StatsGate = ({ children }: StatsGateProps) => {
             className="mt-5 w-full rounded-full bg-brand px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg"
             onClick={handleVerify}
           >
-            Unlock Statistics
+            Statisztika feloldása
           </button>
         </div>
       </div>

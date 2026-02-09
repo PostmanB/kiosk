@@ -15,6 +15,32 @@ type SummaryLine = {
 const formatCurrency = (value: number) => `EUR ${value.toFixed(2)}`;
 const formatTime = (value: string) =>
   new Date(value).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+const TAKEAWAY_VALUE = "Takeaway";
+const TAKEAWAY_LABEL = "Elvitel";
+const NO_SAUCE_VALUE = "No sauce";
+const NO_SIDE_VALUE = "No side";
+const MODIFIER_LABELS = {
+  Sauce: "Szósz",
+  Side: "Köret",
+  Extras: "Extrák",
+} as const;
+const MODIFIER_VALUE_LABELS = {
+  [NO_SAUCE_VALUE]: "Szósz nélkül",
+  [NO_SIDE_VALUE]: "Köret nélkül",
+} as const;
+
+const formatModifierGroup = (group: string) =>
+  MODIFIER_LABELS[group as keyof typeof MODIFIER_LABELS] ?? group;
+const formatModifierValue = (value: string) =>
+  MODIFIER_VALUE_LABELS[value as keyof typeof MODIFIER_VALUE_LABELS] ?? value;
+const isExtraGroup = (group: string) => /extra|extrá/i.test(group);
+const isTakeaway = (value: string) => {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === TAKEAWAY_VALUE.toLowerCase() ||
+    normalized === TAKEAWAY_LABEL.toLowerCase()
+  );
+};
 
 type ModifierLine = {
   text: string;
@@ -26,10 +52,12 @@ const formatModifierLines = (modifiers?: Record<string, string[]>) => {
   return Object.entries(modifiers)
     .flatMap(([group, values]) => {
       if (!values || values.length === 0) return [];
+      const label = formatModifierGroup(group);
+      const displayValues = values.map((value) => formatModifierValue(value));
       return [
         {
-          text: `${group}: ${values.join(", ")}`,
-          isExtra: /extra/i.test(group),
+          text: `${label}: ${displayValues.join(", ")}`,
+          isExtra: isExtraGroup(group),
         },
       ];
     })
@@ -53,7 +81,8 @@ const buildSummaryLines = (
   return Array.from(map.values());
 };
 
-const formatBillLabel = (value: string) => (value === "Takeaway" ? "Takeaway" : `Bill ${value}`);
+const formatBillLabel = (value: string) =>
+  isTakeaway(value) ? TAKEAWAY_LABEL : `Számla ${value}`;
 
 const Bills = () => {
   const { orders, isLoading, error } = useOrders();
@@ -130,14 +159,14 @@ const Bills = () => {
       paperWidthMm: 58,
     });
     if (printResult.supported && !printResult.ok) {
-      toast("Bill printer not responding. Check Bluetooth.", { type: "error" });
+      toast("A számlanyomtató nem válaszol. Ellenőrizd a Bluetooth-t.", { type: "error" });
     }
   };
 
   return (
     <section className="space-y-10">
       <div className="rounded-2xl border border-accent-3/60 bg-accent-2/70 px-4 py-3 text-sm text-contrast/70 shadow-sm">
-        {isLoading ? "Syncing bills..." : `${billGroups.length} open bills`}
+        {isLoading ? "Számlák szinkronizálása..." : `${billGroups.length} nyitott számla`}
       </div>
 
       {error ? (
@@ -148,14 +177,14 @@ const Bills = () => {
 
       {billGroups.length === 0 ? (
         <div className="rounded-3xl border border-dashed border-accent-3/60 bg-accent-1/80 p-8 text-sm text-contrast/60">
-          No open bills right now.
+          Jelenleg nincs nyitott számla.
         </div>
       ) : (
         <div className="rounded-3xl border border-accent-3/60 bg-accent-1/80 p-6 shadow-lg shadow-accent-4/20">
           <div className="flex items-center justify-between">
-            <h2 className="text-lg font-semibold text-contrast">Open Bills</h2>
+            <h2 className="text-lg font-semibold text-contrast">Nyitott számlák</h2>
             <span className="rounded-full border border-emerald-500/30 bg-emerald-500/15 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-emerald-300">
-              {billGroups.length} bills
+              {billGroups.length} számla
             </span>
           </div>
           <div className="mt-4">
@@ -180,7 +209,7 @@ const Bills = () => {
                       <div>
                         <p className="text-lg font-semibold">{formatBillLabel(group.bill)}</p>
                         <p className="text-xs text-contrast/60">
-                          Opened {formatTime(group.openedAt)} ? {group.itemCount} items
+                          Megnyitva {formatTime(group.openedAt)} ? {group.itemCount} tétel
                         </p>
                       </div>
                       {group.showTotal ? (
@@ -191,7 +220,7 @@ const Bills = () => {
                     </div>
                     <ul className="space-y-2 text-xs text-contrast/80">
                       {previewLines.length === 0 ? (
-                        <li className="text-[11px] text-contrast/60">No items yet.</li>
+                        <li className="text-[11px] text-contrast/60">Még nincsenek tételek.</li>
                       ) : (
                         previewLines.map((line) => (
                           <li key={`${group.bill}-${line.name}-${line.registerCode ?? "none"}`}>
@@ -202,11 +231,11 @@ const Bills = () => {
                     </ul>
                     <div className="mt-auto flex items-center justify-between">
                       <span className="text-xs font-semibold uppercase tracking-wide text-brand/70">
-                        View details
+                        Részletek
                       </span>
                       {group.ordersCount > 1 ? (
                         <span className="text-[10px] uppercase tracking-wide text-contrast/60">
-                          {group.ordersCount} orders
+                          {group.ordersCount} rendelés
                         </span>
                       ) : null}
                     </div>
@@ -223,49 +252,48 @@ const Bills = () => {
             <div className="fixed inset-0 z-[80] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4">
           <button
             type="button"
-            aria-label="Close"
+            aria-label="Bezárás"
             className="absolute inset-0"
             onClick={() => setSelectedBill(null)}
           />
           <div className="relative z-10 flex w-full max-w-3xl max-h-[85vh] flex-col overflow-hidden rounded-3xl border border-accent-3/60 bg-primary p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                  Bill details
-                </p>
-                <h2 className="text-2xl font-semibold text-contrast">
-                  {formatBillLabel(selectedGroup.bill)}
-                </h2>
-                <p className="mt-1 text-xs text-contrast/60">
-                  {selectedGroup.ordersCount} order
-                  {selectedGroup.ordersCount === 1 ? "" : "s"} ? Opened{" "}
-                  {formatTime(selectedGroup.openedAt)}
-                </p>
-              </div>
-              <div className="flex flex-wrap gap-2">
-                {canPrint ? (
-                  <button
-                    type="button"
-                    onClick={handlePrintBill}
-                    className="rounded-full bg-brand px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5"
-                  >
-                    Print bill
-                  </button>
-                ) : null}
-                <button
-                  type="button"
-                  onClick={() => setSelectedBill(null)}
-                  className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
-                >
-                  Close
-                </button>
-              </div>
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
+                      Számla részletei
+                    </p>
+                    <h2 className="text-2xl font-semibold text-contrast">
+                      {formatBillLabel(selectedGroup.bill)}
+                    </h2>
+                    <p className="mt-1 text-xs text-contrast/60">
+                      {selectedGroup.ordersCount} rendelés ? Megnyitva{" "}
+                      {formatTime(selectedGroup.openedAt)}
+                    </p>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {canPrint ? (
+                      <button
+                        type="button"
+                        onClick={handlePrintBill}
+                        className="rounded-full bg-brand px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5"
+                      >
+                        Számla nyomtatása
+                      </button>
+                    ) : null}
+                    <button
+                      type="button"
+                      onClick={() => setSelectedBill(null)}
+                      className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                    >
+                      Bezárás
+                    </button>
+                  </div>
             </div>
 
             <div className="mt-6 grid flex-1 min-h-0 gap-6 overflow-hidden lg:grid-cols-[1.2fr_0.8fr]">
               <section className="no-scrollbar min-h-0 space-y-3 overflow-y-auto pr-2">
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-contrast/70">
-                  Detailed items
+                  Részletes tételek
                 </h3>
                 <div className="space-y-3">
                   {selectedGroup.items.map((item, index) => {
@@ -307,7 +335,7 @@ const Bills = () => {
                 {selectedGroup.showTotal ? (
                   <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast/70">
                     <div className="flex items-center justify-between">
-                      <span>Total</span>
+                      <span>Összesen</span>
                       <span className="text-base font-semibold text-contrast">
                         {formatCurrency(selectedGroup.total)}
                       </span>
@@ -316,10 +344,10 @@ const Bills = () => {
                 ) : null}
                 <div className="space-y-3">
                   <h3 className="text-sm font-semibold uppercase tracking-wide text-contrast/70">
-                    Summary
+                    Összegzés
                   </h3>
                   {summaryLines.length === 0 ? (
-                    <p className="text-sm text-contrast/60">No items in this bill.</p>
+                    <p className="text-sm text-contrast/60">Nincs tétel ezen a számlán.</p>
                   ) : (
                     <div className="space-y-2">
                       {summaryLines.map((line) => (
@@ -331,7 +359,7 @@ const Bills = () => {
                             {line.quantity}x {line.name}
                           </p>
                           <p className="text-xs text-contrast/60">
-                            Code {line.registerCode ?? "-"}
+                            Kód {line.registerCode ?? "-"}
                           </p>
                         </div>
                       ))}
@@ -343,9 +371,9 @@ const Bills = () => {
 
             <div className="mt-6 flex flex-col gap-3 border-t border-accent-3/60 pt-4 sm:flex-row sm:items-center sm:justify-between">
               <div className="text-sm text-contrast/70">
-                <p className="font-semibold text-contrast">Ready to close this bill?</p>
+                <p className="font-semibold text-contrast">Készen állsz a számla lezárására?</p>
                 <p className="text-xs text-contrast/60">
-                  This will mark the bill as closed and remove it from open bills.
+                  Ez lezárja a számlát és eltávolítja a nyitott számlák közül.
                 </p>
               </div>
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
@@ -354,7 +382,7 @@ const Bills = () => {
                   onClick={() => setSelectedBill(null)}
                   className="rounded-full border border-accent-3/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
                 >
-                  Keep open
+                  Nyitva hagyás
                 </button>
                 {confirmClose ? (
                   <button
@@ -363,16 +391,16 @@ const Bills = () => {
                       if (!selectedGroup?.sessionId) return;
                       const result = await closeSession(selectedGroup.sessionId);
                       if (!result.ok) {
-                        toast(result.error ?? "Unable to close bill.", { type: "error" });
+                        toast(result.error ?? "Nem sikerült lezárni a számlát.", { type: "error" });
                         return;
                       }
-                      toast("Bill closed.", { type: "success" });
+                      toast("Számla lezárva.", { type: "success" });
                       setConfirmClose(false);
                       setSelectedBill(null);
                     }}
                     className="rounded-full bg-amber-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-md shadow-amber-500/30 transition hover:-translate-y-0.5 hover:shadow-lg"
                   >
-                    Confirm close
+                    Lezárás megerősítése
                   </button>
                 ) : (
                   <button
@@ -380,7 +408,7 @@ const Bills = () => {
                     onClick={() => setConfirmClose(true)}
                     className="rounded-full border border-amber-500/70 bg-amber-200/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-amber-900 transition hover:border-amber-600/70 hover:text-amber-900 dark:border-amber-400/60 dark:bg-amber-400/15 dark:text-amber-100 dark:hover:border-amber-300 dark:hover:text-amber-50"
                   >
-                    Close bill
+                    Számla lezárása
                   </button>
                 )}
               </div>

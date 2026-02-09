@@ -120,7 +120,8 @@ const cls = (...classes: Array<string | undefined>) => {
 
 const ThemeToggle = ({ variant = "icon", className }: ThemeToggleProps) => {
   const { theme, toggleTheme } = useTheme();
-  const activateLabel = `Activate ${theme === "dark" ? "light" : "dark"} theme`;
+  const activateLabel =
+    theme === "dark" ? "Világos téma bekapcsolása" : "Sötét téma bekapcsolása";
 
   if (variant === "menu") {
     return (
@@ -134,7 +135,7 @@ const ThemeToggle = ({ variant = "icon", className }: ThemeToggleProps) => {
           className
         )}
       >
-        <span>Toggle theme</span>
+        <span>Téma váltása</span>
         {theme === "dark" ? (
           <FaMoon className="h-4 w-4" />
         ) : (

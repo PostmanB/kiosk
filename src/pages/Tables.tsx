@@ -4,13 +4,40 @@ import { useOrders } from "../features/orders/OrdersContext";
 import { useSessions } from "../features/sessions/SessionsContext";
 
 const formatCurrency = (value: number) => `EUR ${value.toFixed(2)}`;
+const TAKEAWAY_VALUE = "Takeaway";
+const TAKEAWAY_LABEL = "Elvitel";
+const NO_SAUCE_VALUE = "No sauce";
+const NO_SIDE_VALUE = "No side";
+const MODIFIER_LABELS = {
+  Sauce: "Szósz",
+  Side: "Köret",
+  Extras: "Extrák",
+} as const;
+const MODIFIER_VALUE_LABELS = {
+  [NO_SAUCE_VALUE]: "Szósz nélkül",
+  [NO_SIDE_VALUE]: "Köret nélkül",
+} as const;
+
+const formatModifierGroup = (group: string) =>
+  MODIFIER_LABELS[group as keyof typeof MODIFIER_LABELS] ?? group;
+const formatModifierValue = (value: string) =>
+  MODIFIER_VALUE_LABELS[value as keyof typeof MODIFIER_VALUE_LABELS] ?? value;
+const isTakeaway = (value: string) => {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === TAKEAWAY_VALUE.toLowerCase() ||
+    normalized === TAKEAWAY_LABEL.toLowerCase()
+  );
+};
 
 const formatModifierLines = (modifiers?: Record<string, string[]>) => {
   if (!modifiers) return [];
   return Object.entries(modifiers)
     .map(([group, values]) => {
       if (!values || values.length === 0) return null;
-      return `${group}: ${values.join(", ")}`;
+      const label = formatModifierGroup(group);
+      const displayValues = values.map((value) => formatModifierValue(value));
+      return `${label}: ${displayValues.join(", ")}`;
     })
     .filter(Boolean) as string[];
 };
@@ -36,7 +63,7 @@ const Tables = () => {
     ],
     []
   );
-  const takeawayLabel = "Takeaway";
+  const takeawayLabel = TAKEAWAY_LABEL;
 
   const tableGroups = useMemo(() => {
     const openSessions = sessions.filter((session) => session.status === "open");
@@ -64,6 +91,8 @@ const Tables = () => {
     tableGroups.forEach((group) => map.set(group.table, group));
     return map;
   }, [tableGroups]);
+  const takeawayGroup = tableMap.get(TAKEAWAY_VALUE) ?? tableMap.get(TAKEAWAY_LABEL) ?? null;
+  const takeawayKey = takeawayGroup?.table ?? TAKEAWAY_VALUE;
 
   const selectedGroup = selectedTable ? tableMap.get(selectedTable) : null;
   const summaryLines = useMemo(() => {
@@ -90,17 +119,17 @@ const Tables = () => {
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand/70">
-            Table Overview
+            Asztal áttekintés
           </p>
           <h1 className="text-3xl font-bold text-contrast sm:text-4xl">
-            See what each table ordered.
+            Nézd meg, mit rendelt minden asztal.
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-contrast/75">
-            Active orders grouped by table with totals and modifiers.
+            Aktív rendelések asztalonként, összesítéssel és módosítókkal.
           </p>
         </div>
         <div className="rounded-2xl border border-accent-3/60 bg-accent-2/70 px-4 py-3 text-sm text-contrast/70 shadow-sm">
-          {isLoading ? "Syncing orders..." : `${tableGroups.length} tables active`}
+          {isLoading ? "Rendelések szinkronizálása..." : `${tableGroups.length} aktív asztal`}
         </div>
       </header>
 
@@ -111,11 +140,13 @@ const Tables = () => {
       ) : null}
 
       <div className="rounded-3xl border border-accent-3/60 bg-accent-1/80 p-6 shadow-lg shadow-accent-4/20">
-        <h2 className="text-lg font-semibold text-contrast">Table map</h2>
+        <h2 className="text-lg font-semibold text-contrast">Asztaltérkép</h2>
         {tableGroups.length === 0 ? (
-          <p className="mt-4 text-sm text-contrast/60">No active tables right now.</p>
+          <p className="mt-4 text-sm text-contrast/60">Jelenleg nincs aktív asztal.</p>
         ) : (
-          <p className="mt-2 text-xs text-contrast/60">Tap a table to view its order summary.</p>
+          <p className="mt-2 text-xs text-contrast/60">
+            Érints meg egy asztalt az összegzéshez.
+          </p>
         )}
         <div className="mt-4 rounded-3xl border border-accent-3/60 bg-primary/70 p-4">
           <div className="relative h-[320px] w-full max-w-2xl">
@@ -157,17 +188,17 @@ const Tables = () => {
           <button
             type="button"
             onClick={() => {
-              if (!tableMap.get(takeawayLabel)) return;
-              setSelectedTable(takeawayLabel);
+              if (!takeawayGroup) return;
+              setSelectedTable(takeawayKey);
             }}
             className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
-              selectedTable === takeawayLabel
+              selectedTable && isTakeaway(selectedTable)
                 ? "border-brand/60 bg-brand text-white shadow-md shadow-brand/40"
-                : tableMap.get(takeawayLabel)
+                : takeawayGroup
                   ? "border-emerald-400/50 bg-emerald-500/15 text-emerald-100 hover:border-brand/50 hover:text-brand"
                   : "border-accent-3/60 bg-primary/70 text-contrast/40"
             }`}
-            disabled={!tableMap.get(takeawayLabel)}
+            disabled={!takeawayGroup}
           >
             {takeawayLabel}
           </button>
@@ -179,7 +210,7 @@ const Tables = () => {
             <div className="fixed inset-0 z-[80] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4">
           <button
             type="button"
-            aria-label="Close"
+            aria-label="Bezárás"
             className="absolute inset-0"
             onClick={() => setSelectedTable(null)}
           />
@@ -187,16 +218,15 @@ const Tables = () => {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                  Table details
+                  Asztal részletei
                 </p>
                 <h2 className="text-2xl font-semibold text-contrast">
-                  {selectedGroup.table === takeawayLabel
+                  {isTakeaway(selectedGroup.table)
                     ? takeawayLabel
-                    : `Table ${selectedGroup.table}`}
+                    : `Asztal ${selectedGroup.table}`}
                 </h2>
                 <p className="mt-1 text-xs text-contrast/60">
-                  {selectedGroup.ordersCount} order
-                  {selectedGroup.ordersCount === 1 ? "" : "s"}
+                  {selectedGroup.ordersCount} rendelés
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -209,14 +239,14 @@ const Tables = () => {
                   }}
                   className="rounded-full border border-amber-400/40 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300 hover:text-amber-50"
                 >
-                  Close bill
+                  Számla lezárása
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelectedTable(null)}
                   className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
                 >
-                  Close
+                  Bezárás
                 </button>
               </div>
             </div>
@@ -224,7 +254,7 @@ const Tables = () => {
             <div className="mt-6 grid flex-1 min-h-0 gap-6 overflow-hidden lg:grid-cols-[1.2fr_0.8fr]">
               <section className="no-scrollbar min-h-0 space-y-3 overflow-y-auto pr-2">
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-contrast/70">
-                  Detailed items
+                  Részletes tételek
                 </h3>
                 <div className="space-y-3">
                   {selectedGroup.items.map((item, index) => {
@@ -260,7 +290,7 @@ const Tables = () => {
               <aside className="no-scrollbar min-h-0 space-y-4 overflow-y-auto pr-2">
                 <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast/70">
                   <div className="flex items-center justify-between">
-                    <span>Total</span>
+                    <span>Összesen</span>
                     <span className="text-base font-semibold text-contrast">
                       {formatCurrency(
                         selectedGroup.items.reduce(
@@ -273,10 +303,10 @@ const Tables = () => {
                 </div>
                 <div className="space-y-3">
                   <h3 className="text-sm font-semibold uppercase tracking-wide text-contrast/70">
-                    Summary
+                    Összegzés
                   </h3>
                   {summaryLines.length === 0 ? (
-                    <p className="text-sm text-contrast/60">No items in this table.</p>
+                    <p className="text-sm text-contrast/60">Nincs tétel ezen az asztalon.</p>
                   ) : (
                     <div className="space-y-2">
                       {summaryLines.map((line) => (
@@ -288,7 +318,7 @@ const Tables = () => {
                             {line.quantity}x {line.name}
                           </p>
                           <p className="text-xs text-contrast/60">
-                            Code {line.registerCode ?? "—"}
+                            Kód {line.registerCode ?? "—"}
                           </p>
                         </div>
                       ))}

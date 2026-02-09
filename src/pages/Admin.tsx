@@ -38,6 +38,24 @@ const ICON_CHOICES = [
   "icon-park-outline:hamburger",
   "icon-park-outline:icecream",
 ];
+const SIDE_CATEGORY_NAMES = ["sides", "köretek"];
+const DRINKS_CATEGORY_NAMES = ["drinks", "italok"];
+const TYPE_LABELS = {
+  category: "kategória",
+  sauce: "szósz",
+  side: "köret",
+  item: "menütétel",
+} as const;
+const formatCategoryName = (name: string) => {
+  const normalized = name.trim().toLowerCase();
+  if (normalized === "sides") return "Köretek";
+  if (normalized === "drinks") return "Italok";
+  return name;
+};
+const isSideCategoryName = (name: string) =>
+  SIDE_CATEGORY_NAMES.includes(name.trim().toLowerCase());
+const isDrinksCategoryName = (name: string) =>
+  DRINKS_CATEGORY_NAMES.includes(name.trim().toLowerCase());
 const Admin = () => {
   const {
     categories,
@@ -94,11 +112,11 @@ const Admin = () => {
     return counts;
   }, [items]);
   const selectedCategoryName = useMemo(
-    () => categories.find((category) => category.id === itemCategoryId)?.name?.trim().toLowerCase() ?? "",
+    () => categories.find((category) => category.id === itemCategoryId)?.name?.trim() ?? "",
     [categories, itemCategoryId]
   );
-  const isSidesCategory = selectedCategoryName === "sides";
-  const isDrinksCategory = selectedCategoryName === "drinks";
+  const isSidesCategory = isSideCategoryName(selectedCategoryName);
+  const isDrinksCategory = isDrinksCategoryName(selectedCategoryName);
   useEffect(() => {
     if (!itemCategoryId && categories.length > 0) {
       setItemCategoryId(categories[0].id);
@@ -186,19 +204,25 @@ const Admin = () => {
   const handleSave = async () => {
     if (!modal) return;
     if (modal.mode === "add") {
-      if (modal.type === "category") {
-        const result = await addCategory(nameField);
-        setModalFeedback(result.ok ? "Category added." : result.error ?? "Unable to add category.");
+        if (modal.type === "category") {
+          const result = await addCategory(nameField);
+        setModalFeedback(
+          result.ok ? "Kategória hozzáadva." : result.error ?? "Nem sikerült hozzáadni a kategóriát."
+        );
         if (result.ok) closeModal();
       }
       if (modal.type === "sauce") {
         const result = await addSauce(nameField);
-        setModalFeedback(result.ok ? "Sauce added." : result.error ?? "Unable to add sauce.");
+        setModalFeedback(
+          result.ok ? "Szósz hozzáadva." : result.error ?? "Nem sikerült hozzáadni a szószt."
+        );
         if (result.ok) closeModal();
       }
       if (modal.type === "side") {
         const result = await addSide(nameField);
-        setModalFeedback(result.ok ? "Side added." : result.error ?? "Unable to add side.");
+        setModalFeedback(
+          result.ok ? "Köret hozzáadva." : result.error ?? "Nem sikerült hozzáadni a köretet."
+        );
         if (result.ok) closeModal();
       }
       if (modal.type === "item") {
@@ -214,7 +238,9 @@ const Admin = () => {
           show_in_kitchen: itemShowInKitchen,
           is_active: itemIsActive,
         });
-        setModalFeedback(result.ok ? "Item added." : result.error ?? "Unable to add item.");
+        setModalFeedback(
+          result.ok ? "Tétel hozzáadva." : result.error ?? "Nem sikerült hozzáadni a tételt."
+        );
         if (result.ok) closeModal();
       }
     }
@@ -232,7 +258,7 @@ const Admin = () => {
         show_in_kitchen: itemShowInKitchen,
         is_active: itemIsActive,
       });
-      setModalFeedback(result.ok ? "Saved." : result.error ?? "Unable to save.");
+      setModalFeedback(result.ok ? "Mentve." : result.error ?? "Nem sikerült menteni.");
       if (result.ok) closeModal();
     }
   };
@@ -240,32 +266,32 @@ const Admin = () => {
     const result = await updateCategory(id, categoryEdits[id] ?? "");
     setRowFeedback((prev) => ({
       ...prev,
-      [id]: result.ok ? "Saved." : result.error ?? "Unable to save.",
+      [id]: result.ok ? "Mentve." : result.error ?? "Nem sikerült menteni.",
     }));
   };
   const handleUpdateSauce = async (id: string) => {
     const result = await updateSauce(id, sauceEdits[id] ?? "");
     setRowFeedback((prev) => ({
       ...prev,
-      [id]: result.ok ? "Saved." : result.error ?? "Unable to save.",
+      [id]: result.ok ? "Mentve." : result.error ?? "Nem sikerült menteni.",
     }));
   };
   const handleUpdateSide = async (id: string) => {
     const result = await updateSide(id, sideEdits[id] ?? "");
     setRowFeedback((prev) => ({
       ...prev,
-      [id]: result.ok ? "Saved." : result.error ?? "Unable to save.",
+      [id]: result.ok ? "Mentve." : result.error ?? "Nem sikerült menteni.",
     }));
   };
   const handleAddInline = async (type: "category" | "sauce" | "side") => {
     const value = newEntry[type].trim();
     if (!value) {
-      setModalFeedback("Name is required.");
+      setModalFeedback("A név megadása kötelező.");
       return;
     }
     const addFn = type === "category" ? addCategory : type === "sauce" ? addSauce : addSide;
     const result = await addFn(value);
-    setModalFeedback(result.ok ? "Added." : result.error ?? "Unable to add.");
+    setModalFeedback(result.ok ? "Hozzáadva." : result.error ?? "Nem sikerült hozzáadni.");
     if (result.ok) {
       setNewEntry((prev) => ({ ...prev, [type]: "" }));
     }
@@ -292,18 +318,18 @@ const Admin = () => {
               }))
             }
             className="flex-1 rounded-2xl border border-accent-3/60 bg-primary/70 px-3 py-2 text-sm text-contrast outline-none transition focus:border-brand/60"
-            placeholder={`Add new ${type}`}
+            placeholder={`Új ${TYPE_LABELS[type]}`}
           />
           <button
             type="button"
             onClick={() => handleAddInline(type)}
             className="rounded-full bg-brand px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg"
           >
-            Add
+            Hozzáadás
           </button>
         </div>
         {data.length === 0 ? (
-          <p className="text-sm text-contrast/60">No entries yet.</p>
+          <p className="text-sm text-contrast/60">Még nincs bejegyzés.</p>
         ) : (
           data.map((entry) => (
             <div
@@ -326,25 +352,25 @@ const Admin = () => {
                   onClick={() => saveHandler(entry.id)}
                   className="rounded-full bg-brand px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg"
                 >
-                  Save
+                  Mentés
                 </button>
                 {canDelete ? (
                   (() => {
                     if (type === "category") {
                       const count = categoryItemCounts.get(entry.id) ?? 0;
                       const isDefault =
-                        ["sides", "drinks"].includes(entry.name.trim().toLowerCase());
+                        isSideCategoryName(entry.name) || isDrinksCategoryName(entry.name);
                       if (count > 0 || isDefault) {
                         return (
                           <span className="text-[11px] text-contrast/50">
-                            {isDefault ? "Default" : `${count} items`}
+                            {isDefault ? "Alapértelmezett" : `${count} tétel`}
                           </span>
                         );
                       }
                     }
 
                     if (confirmDeleteCategoryId === entry.id) {
-                      const label = type === "category" ? "Category" : "Sauce";
+                      const label = type === "category" ? "Kategória" : "Szósz";
                       return (
                         <button
                           type="button"
@@ -356,13 +382,13 @@ const Admin = () => {
                             setConfirmDeleteCategoryId(null);
                             setModalFeedback(
                               result.ok
-                                ? `${label} deleted.`
-                                : result.error ?? `Unable to delete ${label.toLowerCase()}.`
+                                ? `${label} törölve.`
+                                : result.error ?? "Nem sikerült törölni."
                             );
                           }}
                           className="rounded-full border border-rose-400/70 bg-rose-500/15 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-rose-300 transition hover:border-rose-300 hover:text-rose-200"
                         >
-                          Confirm delete
+                          Törlés megerősítése
                         </button>
                       );
                     }
@@ -372,7 +398,7 @@ const Admin = () => {
                         onClick={() => setConfirmDeleteCategoryId(entry.id)}
                         className="rounded-full border border-rose-400/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-rose-300 transition hover:border-rose-300 hover:text-rose-200"
                       >
-                        Delete
+                        Törlés
                       </button>
                     );
                   })()
@@ -390,7 +416,7 @@ const Admin = () => {
   return (
     <section className="space-y-10">
       <div className="rounded-2xl border border-accent-3/60 bg-accent-2/70 px-4 py-3 text-sm text-contrast/70 shadow-sm">
-        {isLoading ? "Syncing menu..." : `${items.length} menu items`}
+        {isLoading ? "Menü szinkronizálása..." : `${items.length} menütétel`}
       </div>
       {error ? (
         <div className="rounded-2xl border border-rose-500/40 bg-rose-500/10 p-4 text-sm text-rose-200">
@@ -403,27 +429,27 @@ const Admin = () => {
           onClick={() => openAddModal("item")}
           className="rounded-full border border-brand/40 px-5 py-2 text-sm font-semibold uppercase tracking-wide text-brand transition hover:bg-brand/10"
         >
-          Add item
+          Tétel hozzáadása
         </button>
         <button
           type="button"
           onClick={() => openEditListModal("category")}
           className="rounded-full border border-accent-3/60 px-5 py-2 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
         >
-          Edit categories
+          Kategóriák szerkesztése
         </button>
         <button
           type="button"
           onClick={() => openEditListModal("sauce")}
           className="rounded-full border border-accent-3/60 px-5 py-2 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
         >
-          Edit sauces
+          Szószok szerkesztése
         </button>
       </div>
       <div className="rounded-3xl border border-accent-3/60 bg-accent-2/70 p-8">
-        <h2 className="text-lg font-semibold text-contrast">Menu items</h2>
+        <h2 className="text-lg font-semibold text-contrast">Menütételek</h2>
         {items.length === 0 ? (
-          <p className="mt-3 text-sm text-contrast/60">No items yet.</p>
+          <p className="mt-3 text-sm text-contrast/60">Még nincs tétel.</p>
         ) : (
           <div className="mt-4 grid gap-3 grid-cols-[repeat(auto-fit,minmax(240px,1fr))]">
             {items.map((item: MenuItem) => (
@@ -434,12 +460,12 @@ const Admin = () => {
                 className="group relative flex h-full flex-col gap-2 overflow-hidden rounded-2xl border border-accent-3/60 bg-primary/70 p-4 text-left text-sm text-contrast transition hover:border-brand/50 hover:-translate-y-0.5"
               >
                 {item.is_active === false ? (
-                  <span className="pointer-events-none absolute inset-0">
-                    <span className="absolute left-1/2 top-1/2 w-[200%] -translate-x-1/2 -translate-y-1/2 -rotate-[18deg] text-center text-2xl font-extrabold uppercase tracking-[0.35em] text-rose-500">
-                      Disabled
+                    <span className="pointer-events-none absolute inset-0">
+                      <span className="absolute left-1/2 top-1/2 w-[200%] -translate-x-1/2 -translate-y-1/2 -rotate-[18deg] text-center text-2xl font-extrabold uppercase tracking-[0.35em] text-rose-500">
+                      Inaktív
+                      </span>
                     </span>
-                  </span>
-                ) : null}
+                  ) : null}
                 <div className={item.is_active === false ? "opacity-35" : ""}>
                 <div className="flex items-start justify-between gap-3">
                   <div className="flex items-start gap-3">
@@ -449,7 +475,10 @@ const Admin = () => {
                     <div>
                       <p className="font-semibold">{item.name}</p>
                       <p className="text-xs text-contrast/60">
-                        {categoryMap.get(item.category_id) ?? "Unassigned"}
+                        {(() => {
+                          const categoryName = categoryMap.get(item.category_id);
+                          return categoryName ? formatCategoryName(categoryName) : "Nincs besorolva";
+                        })()}
                       </p>
                     </div>
                   </div>
@@ -457,21 +486,21 @@ const Admin = () => {
                 </div>
                 {item.register_code ? (
                   <span className="text-[11px] font-semibold text-contrast/60">
-                    Code {item.register_code}
+                    Kód {item.register_code}
                   </span>
                 ) : (
-                  <span className="text-[11px] text-contrast/40">No register code</span>
+                  <span className="text-[11px] text-contrast/40">Nincs regiszterkód</span>
                 )}
                 {!item.show_in_kitchen ? (
                   <span className="text-[11px] font-semibold text-rose-300">
-                    Hidden from kitchen
+                    Rejtve a konyha elől
                   </span>
                 ) : null}
                 <div className="flex flex-wrap gap-2 text-[11px] text-contrast/60">
-                  {item.allow_sauces ? <span>Sauces</span> : null}
-                  {item.allow_sides ? <span>Sides</span> : null}
+                  {item.allow_sauces ? <span>Szószok</span> : null}
+                  {item.allow_sides ? <span>Köretek</span> : null}
                 </div>
-                <span className="text-[11px] text-brand/70">Tap to edit</span>
+                <span className="text-[11px] text-brand/70">Érintsd meg a szerkesztéshez</span>
                 </div>
               </button>
             ))}
@@ -481,28 +510,28 @@ const Admin = () => {
       {modal && portalTarget
         ? createPortal(
             <div className="fixed inset-0 z-[80] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4">
-          <button type="button" aria-label="Close" className="absolute inset-0" onClick={closeModal} />
+          <button type="button" aria-label="Bezárás" className="absolute inset-0" onClick={closeModal} />
           <div className="relative z-10 w-full max-h-[85vh] max-w-xl overflow-y-auto rounded-3xl border border-accent-3/60 bg-primary p-6 shadow-2xl">
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                  {modal.mode === "add" ? "Add new" : "Edit"}
+                  {modal.mode === "add" ? "Új hozzáadása" : "Szerkesztés"}
                 </p>
                 <h2 className="text-2xl font-semibold text-contrast">
-                  {modal.mode === "edit-list" && modalType === "category" && "Categories"}
-                  {modal.mode === "edit-list" && modalType === "sauce" && "Sauces"}
-                  {modal.mode === "edit-list" && modalType === "side" && "Sides"}
-                  {modal.mode === "add" && modalType === "category" && "Category"}
-                  {modal.mode === "add" && modalType === "sauce" && "Sauce"}
-                  {modal.mode === "add" && modalType === "side" && "Side"}
-                  {modal.mode === "add" && modalType === "item" && "Menu item"}
-                  {modal.mode === "edit-item" && "Menu item"}
+                  {modal.mode === "edit-list" && modalType === "category" && "Kategóriák"}
+                  {modal.mode === "edit-list" && modalType === "sauce" && "Szószok"}
+                  {modal.mode === "edit-list" && modalType === "side" && "Köretek"}
+                  {modal.mode === "add" && modalType === "category" && "Kategória"}
+                  {modal.mode === "add" && modalType === "sauce" && "Szósz"}
+                  {modal.mode === "add" && modalType === "side" && "Köret"}
+                  {modal.mode === "add" && modalType === "item" && "Menütétel"}
+                  {modal.mode === "edit-item" && "Menütétel"}
                 </h2>
               </div>
               <button
                 type="button"
                 onClick={closeModal}
-                aria-label="Close"
+                aria-label="Bezárás"
                 className="flex h-9 w-9 items-center justify-center rounded-full border border-accent-3/60 text-contrast/70 transition hover:border-brand/50 hover:text-brand"
               >
                 ×
@@ -521,7 +550,7 @@ const Admin = () => {
                       value={itemName}
                       onChange={(event) => setItemName(event.target.value)}
                       className="w-full rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast outline-none transition focus:border-brand/60"
-                      placeholder="Item name"
+                      placeholder="Tétel neve"
                     />
                     <input
                       type="number"
@@ -535,7 +564,7 @@ const Admin = () => {
                       value={itemRegisterCode}
                       onChange={(event) => setItemRegisterCode(event.target.value)}
                       className="w-full rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast outline-none transition focus:border-brand/60"
-                      placeholder="Register code"
+                      placeholder="Regiszterkód"
                     />
                     <div className="space-y-3">
                       <button
@@ -548,10 +577,10 @@ const Admin = () => {
                         </div>
                         <div>
                           <p className="text-xs font-semibold uppercase tracking-wide text-contrast/70">
-                            {itemIconName ? "Selected icon" : "No icon selected"}
+                            {itemIconName ? "Kiválasztott ikon" : "Nincs ikon kiválasztva"}
                           </p>
                           <p className="text-xs text-contrast/60">
-                            {itemIconName || "Click to choose"}
+                            {itemIconName || "Kattints a kiválasztáshoz"}
                           </p>
                         </div>
                       </button>
@@ -562,11 +591,11 @@ const Admin = () => {
                       className="w-full rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast outline-none transition focus:border-brand/60"
                     >
                       {categories.length === 0 ? (
-                        <option value="">No categories yet</option>
+                        <option value="">Még nincs kategória</option>
                       ) : (
                         categories.map((category) => (
                           <option key={category.id} value={category.id}>
-                            {category.name}
+                            {formatCategoryName(category.name)}
                           </option>
                         ))
                       )}
@@ -575,7 +604,7 @@ const Admin = () => {
                       value={itemDescription}
                       onChange={(event) => setItemDescription(event.target.value)}
                       className="w-full rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast outline-none transition focus:border-brand/60"
-                      placeholder="Short description"
+                      placeholder="Rövid leírás"
                     />
                   </div>
                   <div className="flex flex-wrap gap-4 text-sm text-contrast/70">
@@ -586,7 +615,7 @@ const Admin = () => {
                           checked={itemAllowSauces}
                           onChange={(event) => setItemAllowSauces(event.target.checked)}
                         />
-                        Allow sauces
+                        Szószok engedélyezése
                       </label>
                     ) : null}
                     {!isSidesCategory && !isDrinksCategory ? (
@@ -596,7 +625,7 @@ const Admin = () => {
                           checked={itemAllowSides}
                           onChange={(event) => setItemAllowSides(event.target.checked)}
                         />
-                        Allow sides
+                        Köretek engedélyezése
                       </label>
                     ) : null}
                     {!isDrinksCategory && !isSidesCategory ? (
@@ -606,7 +635,7 @@ const Admin = () => {
                           checked={itemShowInKitchen}
                           onChange={(event) => setItemShowInKitchen(event.target.checked)}
                         />
-                        Show in kitchen
+                        Megjelenítés a konyhán
                       </label>
                     ) : null}
                   </div>
@@ -616,7 +645,7 @@ const Admin = () => {
                   value={nameField}
                   onChange={(event) => setNameField(event.target.value)}
                   className="w-full rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast outline-none transition focus:border-brand/60"
-                  placeholder="Name"
+                  placeholder="Név"
                 />
               )}
               {modalFeedback ? <p className="text-xs text-contrast/70">{modalFeedback}</p> : null}
@@ -624,16 +653,16 @@ const Admin = () => {
                 <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
                   {modal.mode === "edit-item" ? (
                     <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
-                      <button
-                        type="button"
-                        onClick={() => setItemIsActive((prev) => !prev)}
-                        className={`rounded-full border px-5 py-3 text-sm font-semibold uppercase tracking-wide transition ${
-                          itemIsActive
-                            ? "border-slate-300/60 text-slate-500 hover:border-slate-400 hover:text-slate-600"
-                            : "border-emerald-400/50 text-emerald-400 hover:border-emerald-300 hover:text-emerald-300"
-                        }`}
-                      >
-                        {itemIsActive ? "Disable item" : "Enable item"}
+                    <button
+                      type="button"
+                      onClick={() => setItemIsActive((prev) => !prev)}
+                      className={`rounded-full border px-5 py-3 text-sm font-semibold uppercase tracking-wide transition ${
+                        itemIsActive
+                          ? "border-slate-300/60 text-slate-500 hover:border-slate-400 hover:text-slate-600"
+                          : "border-emerald-400/50 text-emerald-400 hover:border-emerald-300 hover:text-emerald-300"
+                      }`}
+                    >
+                        {itemIsActive ? "Tétel letiltása" : "Tétel engedélyezése"}
                       </button>
                       {confirmDeleteItem ? (
                         <button
@@ -641,14 +670,16 @@ const Admin = () => {
                           onClick={async () => {
                             const result = await deleteItem(modal.id);
                             setConfirmDeleteItem(false);
-                            setModalFeedback(result.ok ? "Item deleted." : result.error ?? "Unable to delete item.");
+                            setModalFeedback(
+                              result.ok ? "Tétel törölve." : result.error ?? "Nem sikerült törölni a tételt."
+                            );
                             if (result.ok) {
                               closeModal();
                             }
                           }}
                           className="rounded-full border border-rose-400/70 bg-rose-500/15 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-rose-300 transition hover:border-rose-300 hover:text-rose-200"
                         >
-                          Confirm delete
+                          Törlés megerősítése
                         </button>
                       ) : (
                         <button
@@ -656,7 +687,7 @@ const Admin = () => {
                           onClick={() => setConfirmDeleteItem(true)}
                           className="rounded-full border border-rose-400/60 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-rose-300 transition hover:border-rose-300 hover:text-rose-200"
                         >
-                          Delete item
+                          Tétel törlése
                         </button>
                       )}
                     </div>
@@ -669,7 +700,7 @@ const Admin = () => {
                       onClick={handleSave}
                       className="rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg"
                     >
-                      {modal.mode === "add" ? "Add" : "Save"}
+                      {modal.mode === "add" ? "Hozzáadás" : "Mentés"}
                     </button>
                   </div>
                 </div>
@@ -680,7 +711,7 @@ const Admin = () => {
             <div className="fixed inset-0 z-[90] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4">
               <button
                 type="button"
-                aria-label="Close icon picker"
+                aria-label="Ikonválasztó bezárása"
                 className="absolute inset-0"
                 onClick={() => setIsIconModalOpen(false)}
               />
@@ -688,16 +719,16 @@ const Admin = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                      Icon picker
+                      Ikonválasztó
                     </p>
-                    <h3 className="text-xl font-semibold text-contrast">Choose an icon</h3>
+                    <h3 className="text-xl font-semibold text-contrast">Ikon kiválasztása</h3>
                   </div>
                   <button
                     type="button"
                     onClick={() => setIsIconModalOpen(false)}
                     className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
                   >
-                    Close
+                    Bezárás
                   </button>
                 </div>
                 <div className="mt-5 grid grid-cols-5 gap-3 sm:grid-cols-6 md:grid-cols-8">

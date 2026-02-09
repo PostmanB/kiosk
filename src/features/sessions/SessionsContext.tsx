@@ -88,7 +88,7 @@ export const SessionsProvider = ({ children }: { children: React.ReactNode }) =>
     async (table: string) => {
       const trimmed = table.trim();
       if (!trimmed) {
-        return { ok: false, error: "Table is required." };
+        return { ok: false, error: "Az asztal megadása kötelező." };
       }
       const { data, error: insertError } = await supabase
         .from(TABLE_NAME)
@@ -139,7 +139,7 @@ export const SessionsProvider = ({ children }: { children: React.ReactNode }) =>
 export const useSessions = () => {
   const context = useContext(SessionsContext);
   if (!context) {
-    throw new Error("useSessions must be used within a SessionsProvider.");
+    throw new Error("A useSessions csak SessionsProvideren belül használható.");
   }
   return context;
 };

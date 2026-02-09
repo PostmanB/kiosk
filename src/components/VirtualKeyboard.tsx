@@ -95,13 +95,13 @@ const getFieldLabel = (element: TextTarget) => {
   }
   if (element.placeholder) return element.placeholder;
   if (element.name) return element.name;
-  return "Active field";
+  return "Aktív mező";
 };
 
 const VirtualKeyboard = () => {
   const [isOpen, setIsOpen] = useState(false);
   const [shift, setShift] = useState(false);
-  const [activeLabel, setActiveLabel] = useState("Active field");
+  const [activeLabel, setActiveLabel] = useState("Aktív mező");
   const [activeValue, setActiveValue] = useState("");
   const [activePlaceholder, setActivePlaceholder] = useState("");
   const activeRef = useRef<TextTarget | null>(null);
@@ -314,7 +314,7 @@ const VirtualKeyboard = () => {
         </div>
         <div className="mb-3 flex items-center justify-between">
           <span className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-            Virtual Keyboard
+            Virtuális billentyűzet
           </span>
           <button
             type="button"
@@ -325,7 +325,7 @@ const VirtualKeyboard = () => {
             }}
             className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
           >
-            Hide
+            Elrejtés
           </button>
         </div>
         <div className="space-y-2">
@@ -336,13 +336,13 @@ const VirtualKeyboard = () => {
                 const isShiftActive = key === "shift" && shift;
                 const label =
                   key === "backspace"
-                    ? "Backspace"
+                    ? "Vissza"
                     : key === "space"
-                      ? "Space"
+                      ? "Szóköz"
                       : key === "clear"
-                        ? "Clear"
+                        ? "Törlés"
                         : key === "done"
-                          ? "Done"
+                          ? "Kész"
                           : key === "shift"
                             ? "Shift"
                             : shift

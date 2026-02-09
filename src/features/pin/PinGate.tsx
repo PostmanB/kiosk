@@ -27,13 +27,11 @@ const PinGate = ({ children }: PinGateProps) => {
   }, []);
 
   if (!configuredPin) {
-    throw new Error(
-      "Missing VITE_KIOSK_PIN. Provide an 8-digit PIN."
-    );
+    throw new Error("Hiányzik a VITE_KIOSK_PIN. Adj meg egy 8 jegyű PIN-t.");
   }
 
   if (configuredPin.length !== 8 || /\D/.test(configuredPin)) {
-    throw new Error("VITE_KIOSK_PIN must be exactly 8 digits.");
+    throw new Error("A VITE_KIOSK_PIN pontosan 8 jegyű kell legyen.");
   }
 
   const [unlocked, setUnlocked] = useState(() => {
@@ -72,7 +70,7 @@ const PinGate = ({ children }: PinGateProps) => {
         clearTimeout(timeoutId);
       }
       timeoutId = setTimeout(() => {
-        lock("Session timed out. Enter PIN again.");
+        lock("A munkamenet lejárt. Add meg újra a PIN-t.");
       }, INACTIVITY_TIMEOUT_MS);
     };
 
@@ -106,7 +104,7 @@ const PinGate = ({ children }: PinGateProps) => {
 
   const handleVerify = () => {
     if (pinInput.length !== 8) {
-      setError("Enter the full 8-digit PIN.");
+      setError("Add meg a teljes 8 jegyű PIN-t.");
       return;
     }
 
@@ -119,7 +117,7 @@ const PinGate = ({ children }: PinGateProps) => {
       return;
     }
 
-    setError("Incorrect PIN. Try again.");
+    setError("Hibás PIN. Próbáld újra.");
     setPinInput("");
   };
 
@@ -133,11 +131,11 @@ const PinGate = ({ children }: PinGateProps) => {
         <div className="rounded-3xl border border-accent-3/60 bg-accent-1/80 p-6 shadow-lg shadow-accent-4/20">
           <div className="space-y-2 text-center">
             <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-              Kiosk Locked
+              Kioszk zárolva
             </p>
-            <h1 className="text-2xl font-semibold text-contrast">Enter PIN</h1>
+            <h1 className="text-2xl font-semibold text-contrast">PIN megadása</h1>
             <p className="text-sm text-contrast/70">
-              8-digit access code required.
+              8 jegyű hozzáférési kód szükséges.
             </p>
           </div>
 
@@ -179,7 +177,7 @@ const PinGate = ({ children }: PinGateProps) => {
               className="rounded-2xl border border-accent-3/60 bg-accent-2/70 py-4 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/40 hover:text-brand"
               onClick={handleClear}
             >
-              Clear
+              Törlés
             </button>
             <button
               type="button"
@@ -193,7 +191,7 @@ const PinGate = ({ children }: PinGateProps) => {
               className="rounded-2xl border border-accent-3/60 bg-accent-2/70 py-4 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/40 hover:text-brand"
               onClick={handleBackspace}
             >
-              Back
+              Vissza
             </button>
           </div>
 
@@ -202,7 +200,7 @@ const PinGate = ({ children }: PinGateProps) => {
             className="mt-5 w-full rounded-full bg-brand px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg"
             onClick={handleVerify}
           >
-            Unlock
+            Feloldás
           </button>
         </div>
       </div>
