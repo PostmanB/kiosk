@@ -1,4 +1,5 @@
 ﻿import { useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "react-toastify";
 import { useOrders } from "../features/orders/OrdersContext";
@@ -67,8 +68,10 @@ const formatModifierLines = (modifiers?: Record<string, string[]>) => {
 const Kitchen = () => {
   const { orders, updateStatus, updateItemDone, removeOrder, error } = useOrders();
   const [showServed, setShowServed] = useState(false);
+  const [exitingOrders, setExitingOrders] = useState<Record<string, boolean>>({});
   const portalTarget = typeof document !== "undefined" ? document.body : null;
   useLockBodyScroll(showServed);
+  const exitDurationMs = 220;
 
   const servedToday = useMemo(() => {
     const now = new Date();
@@ -91,9 +94,36 @@ const Kitchen = () => {
     [orders]
   );
 
+  const markOrderExiting = (orderId: string) => {
+    setExitingOrders((prev) => ({ ...prev, [orderId]: true }));
+  };
+
+  const clearOrderExiting = (orderId: string) => {
+    setExitingOrders((prev) => {
+      if (!prev[orderId]) return prev;
+      const next = { ...prev };
+      delete next[orderId];
+      return next;
+    });
+  };
+
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
   const handleMarkServed = async (orderId: string) => {
+    if (exitingOrders[orderId]) return;
+    markOrderExiting(orderId);
+    await sleep(exitDurationMs);
     await updateStatus(orderId, "served");
+    clearOrderExiting(orderId);
     toast("Kiszolgáltnak jelölve.", { type: "success" });
+  };
+
+  const handleRemoveOrder = async (orderId: string) => {
+    if (exitingOrders[orderId]) return;
+    markOrderExiting(orderId);
+    await sleep(exitDurationMs);
+    await removeOrder(orderId);
+    clearOrderExiting(orderId);
   };
 
   return (
@@ -135,7 +165,12 @@ const Kitchen = () => {
               </p>
             ) : (
               <div className="flex gap-4 overflow-x-auto pb-4">
-                {groupedOrders.new.map((order) => {
+                {groupedOrders.new.map((order, index) => {
+                  const isExiting = Boolean(exitingOrders[order.id]);
+                  const animationClass = isExiting ? "animate-fly-out" : "animate-fly-in";
+                  const flyStyle = {
+                    "--fly-delay": `${index * 60}ms`,
+                  } as CSSProperties;
                   const displayItems = order.items
                     .map((item, index) => ({ item, index }))
                     .filter(({ item }) => item.showInKitchen !== false);
@@ -158,12 +193,16 @@ const Kitchen = () => {
                   return (
                     <article
                       key={order.id}
-                      className="flex w-[320px] flex-shrink-0 flex-col gap-4 rounded-3xl border-2 border-dashed border-accent-3/60 bg-primary/80 p-5 text-sm text-contrast shadow-lg shadow-accent-4/20"
+                      style={flyStyle}
+                      className={`flex w-[320px] flex-shrink-0 flex-col gap-4 rounded-3xl border-2 border-dashed border-accent-3/60 bg-primary/80 p-5 text-sm text-contrast shadow-lg shadow-accent-4/20 ${animationClass} ${
+                        isExiting ? "pointer-events-none" : ""
+                      }`}
                     >
                       <button
                         type="button"
                         onClick={() => handleMarkServed(order.id)}
-                        className="w-full rounded-full bg-brand px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow shadow-brand/40 transition hover:-translate-y-0.5"
+                        disabled={isExiting}
+                        className="w-full rounded-full bg-brand px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow shadow-brand/40 transition hover:-translate-y-0.5 disabled:cursor-not-allowed disabled:opacity-70"
                       >
                         Kiszolgáltnak jelölés
                       </button>
@@ -284,7 +323,12 @@ const Kitchen = () => {
                     </p>
                   ) : (
                     <div className="flex gap-4 overflow-x-auto pb-4">
-                      {servedToday.map((order) => {
+                      {servedToday.map((order, index) => {
+                        const isExiting = Boolean(exitingOrders[order.id]);
+                        const animationClass = isExiting ? "animate-fly-out" : "animate-fly-in";
+                        const flyStyle = {
+                          "--fly-delay": `${index * 60}ms`,
+                        } as CSSProperties;
                         const displayItems = order.items
                           .map((item, index) => ({ item, index }))
                           .filter(({ item }) => item.showInKitchen !== false);
@@ -307,7 +351,10 @@ const Kitchen = () => {
                         return (
                           <article
                             key={order.id}
-                            className="flex w-[320px] flex-shrink-0 flex-col gap-4 rounded-3xl border border-accent-3/60 bg-primary/70 p-5 text-sm text-contrast"
+                            style={flyStyle}
+                            className={`flex w-[320px] flex-shrink-0 flex-col gap-4 rounded-3xl border border-accent-3/60 bg-primary/70 p-5 text-sm text-contrast ${animationClass} ${
+                              isExiting ? "pointer-events-none" : ""
+                            }`}
                           >
                             <div className="flex items-start justify-between gap-3">
                               <div>
@@ -371,8 +418,9 @@ const Kitchen = () => {
                             </ul>
                             <button
                               type="button"
-                              onClick={() => removeOrder(order.id)}
-                              className="mt-auto rounded-full border border-rose-500/40 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-rose-300 transition hover:bg-rose-500/10"
+                              onClick={() => handleRemoveOrder(order.id)}
+                              disabled={isExiting}
+                              className="mt-auto rounded-full border border-rose-500/40 px-3 py-2 text-xs font-semibold uppercase tracking-wide text-rose-300 transition hover:bg-rose-500/10 disabled:cursor-not-allowed disabled:opacity-70"
                             >
                               Eltávolítás
                             </button>

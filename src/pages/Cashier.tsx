@@ -197,6 +197,8 @@ const Cashier = () => {
   const [selectedQty, setSelectedQty] = useState(1);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [orderStep, setOrderStep] = useState<1 | 2 | 3>(1);
+  const [panelTransition, setPanelTransition] = useState<"idle" | "out" | "in">("idle");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const resolvedTable = table.trim() || TAKEAWAY_VALUE;
   const billInputValue = isTakeaway(table) ? "" : table;
 
@@ -467,9 +469,17 @@ const Cashier = () => {
     setCartItems((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const panelExitDurationMs = 300;
+  const panelEnterDurationMs = 320;
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
   const handleSubmit = async () => {
+    if (isSubmitting || panelTransition !== "idle") return;
+    setIsSubmitting(true);
+
     if (cartItems.length === 0) {
-      notify("Válassz legalább egy tételt a beküldéshez.", "error");
+      notify("V?lassz legal?bb egy t?telt a bek?ld?shez.", "error");
+      setIsSubmitting(false);
       return;
     }
 
@@ -479,7 +489,8 @@ const Cashier = () => {
     if (!sessionId) {
       const created = await createSession(tableName);
       if (!created.ok || !created.session) {
-        notify(created.error ?? "Nem sikerült munkamenetet nyitni.", "error");
+        notify(created.error ?? "Nem siker?lt munkamenetet nyitni.", "error");
+        setIsSubmitting(false);
         return;
       }
       sessionId = created.session.id;
@@ -504,7 +515,8 @@ const Cashier = () => {
     });
 
     if (!result.ok) {
-      notify(result.error ?? "A rendelést most nem lehet elküldeni.", "error");
+      notify(result.error ?? "A rendel?st most nem lehet elk?ldeni.", "error");
+      setIsSubmitting(false);
       return;
     }
 
@@ -518,7 +530,7 @@ const Cashier = () => {
         paperWidthMm: 58,
       });
       if (printResult.supported && !printResult.ok) {
-        toast("A konyhai nyomtató nem válaszol. Ellenőrizd a Bluetooth-t.", { type: "error" });
+        toast("A konyhai nyomtat? nem v?laszol. Ellen?rizd a Bluetooth-t.", { type: "error" });
       }
     }
 
@@ -526,25 +538,43 @@ const Cashier = () => {
     if (isTakeawayOrder && sessionId) {
       const closeResult = await closeSession(sessionId);
       if (!closeResult.ok) {
-        closeError = closeResult.error ?? "Nem sikerült lezárni az elviteles számlát.";
+        closeError = closeResult.error ?? "Nem siker?lt lez?rni az elviteles sz?ml?t.";
       }
     }
 
-    setTable(TAKEAWAY_VALUE);
-    setCartItems([]);
     if (closeError) {
-      notify(`Rendelés elküldve, de ${closeError}`, "error");
+      notify(`Rendel?s elk?ldve, de ${closeError}`, "error");
     } else {
       notify(
         isTakeawayOrder
-          ? "Rendelés elküldve, és az elviteles számla lezárva."
-          : "Rendelés elküldve a konyhára.",
+          ? "Rendel?s elk?ldve, ?s az elviteles sz?mla lez?rva."
+          : "Rendel?s elk?ldve a konyh?ra.",
         "success"
       );
     }
+
+    setPanelTransition("out");
+    await sleep(panelExitDurationMs);
+
+    setTable(TAKEAWAY_VALUE);
+    setCartItems([]);
     setOrderStep(1);
     setActiveSessionId(null);
+
+    setPanelTransition("in");
+    await sleep(panelEnterDurationMs);
+    setPanelTransition("idle");
+    setIsSubmitting(false);
   };
+
+  const panelAnimationClass =
+    panelTransition === "out"
+      ? "animate-fly-up-out"
+      : panelTransition === "in"
+        ? "animate-slide-up-in"
+        : "";
+  const panelIsAnimating = panelTransition !== "idle";
+  const panelIsLocked = isSubmitting || panelIsAnimating;
 
   return (
     <section className="space-y-10">
@@ -735,7 +765,7 @@ const Cashier = () => {
           )}
         </section>
 
-        <aside className="space-y-6 rounded-3xl border border-accent-3/60 bg-accent-2/70 p-6 shadow-lg shadow-accent-4/20">
+        <aside className={`space-y-6 rounded-3xl border border-accent-3/60 bg-accent-2/70 p-6 shadow-lg shadow-accent-4/20 ${panelAnimationClass} ${panelIsAnimating ? "pointer-events-none" : ""}`} aria-busy={panelIsLocked}>
           {orderStep === 2 ? (
             <div className="space-y-4">
               <div>
@@ -923,7 +953,8 @@ const Cashier = () => {
                     setFeedback(null);
                     setOrderStep(2);
                   }}
-                  className="inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg"
+                  disabled={panelIsLocked}
+                  className="inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   Számla és küldés
                 </button>
@@ -933,14 +964,16 @@ const Cashier = () => {
                 <button
                   type="button"
                   onClick={handleSubmit}
-                  className="inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg"
+                  disabled={panelIsLocked}
+                  className="inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   Küldés a konyhára
                 </button>
                 <button
                   type="button"
                   onClick={() => setOrderStep(1)}
-                  className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                  disabled={panelIsLocked}
+                  className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand disabled:cursor-not-allowed disabled:opacity-70"
                 >
                   Vissza a tételekhez
                 </button>
@@ -955,7 +988,8 @@ const Cashier = () => {
                 setOrderStep(1);
                 setActiveSessionId(null);
               }}
-              className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+              disabled={panelIsLocked}
+              className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand disabled:cursor-not-allowed disabled:opacity-70"
             >
               Rendelés törlése
             </button>

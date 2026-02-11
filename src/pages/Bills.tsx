@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
+import type { CSSProperties } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "react-toastify";
 import { useOrders } from "../features/orders/OrdersContext";
@@ -89,8 +90,12 @@ const Bills = () => {
   const { sessions, closeSession } = useSessions();
   const [selectedBill, setSelectedBill] = useState<string | null>(null);
   const [confirmClose, setConfirmClose] = useState(false);
+  const [exitingBills, setExitingBills] = useState<Record<string, boolean>>({});
+  const [isModalClosing, setIsModalClosing] = useState(false);
   const portalTarget = typeof document !== "undefined" ? document.body : null;
   const canPrint = isAndroidPrinterAvailable();
+  const exitDurationMs = 220;
+  const modalExitDurationMs = 220;
 
   const billGroups = useMemo(() => {
     const openSessions = sessions.filter((session) => session.status === "open");
@@ -139,7 +144,31 @@ const Bills = () => {
 
   useEffect(() => {
     setConfirmClose(false);
+    setIsModalClosing(false);
   }, [selectedGroup?.sessionId]);
+
+  const markBillExiting = (bill: string) => {
+    setExitingBills((prev) => ({ ...prev, [bill]: true }));
+  };
+
+  const clearBillExiting = (bill: string) => {
+    setExitingBills((prev) => {
+      if (!prev[bill]) return prev;
+      const next = { ...prev };
+      delete next[bill];
+      return next;
+    });
+  };
+
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+  const closeModal = async () => {
+    if (isModalClosing) return;
+    setIsModalClosing(true);
+    await sleep(modalExitDurationMs);
+    setSelectedBill(null);
+    setIsModalClosing(false);
+  };
 
   const handlePrintBill = () => {
     if (!selectedGroup) return;
@@ -189,7 +218,12 @@ const Bills = () => {
           </div>
           <div className="mt-4">
             <div className="flex gap-4 overflow-x-auto pb-4">
-              {billGroups.map((group) => {
+              {billGroups.map((group, index) => {
+                const isExiting = Boolean(exitingBills[group.bill]);
+                const animationClass = isExiting ? "animate-fly-out" : "animate-fly-in";
+                const flyStyle = {
+                  "--fly-delay": `${index * 60}ms`,
+                } as CSSProperties;
                 const previewLines = buildSummaryLines(
                   group.items.map((item) => ({
                     name: item.name,
@@ -203,7 +237,10 @@ const Bills = () => {
                     key={group.bill}
                     type="button"
                     onClick={() => setSelectedBill(group.bill)}
-                    className="flex w-[320px] flex-shrink-0 flex-col gap-4 rounded-3xl border-2 border-dashed border-accent-3/60 bg-primary/80 p-5 text-left text-sm text-contrast shadow-lg shadow-accent-4/20 transition hover:-translate-y-0.5 hover:border-brand/50"
+                    style={flyStyle}
+                    className={`flex w-[320px] flex-shrink-0 flex-col gap-4 rounded-3xl border-2 border-dashed border-accent-3/60 bg-primary/80 p-5 text-left text-sm text-contrast shadow-lg shadow-accent-4/20 transition hover:-translate-y-0.5 hover:border-brand/50 ${animationClass} ${
+                      isExiting ? "pointer-events-none" : ""
+                    }`}
                   >
                     <div className="flex items-start justify-between gap-3">
                       <div>
@@ -249,14 +286,14 @@ const Bills = () => {
 
       {selectedGroup && portalTarget
         ? createPortal(
-            <div className="fixed inset-0 z-[80] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4">
+            <div className={`fixed inset-0 z-[80] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4 ${isModalClosing ? "animate-fade-out" : "animate-fade-in"}`}>
           <button
             type="button"
             aria-label="Bezárás"
             className="absolute inset-0"
-            onClick={() => setSelectedBill(null)}
+            onClick={() => void closeModal()}
           />
-          <div className="relative z-10 flex w-full max-w-3xl max-h-[85vh] flex-col overflow-hidden rounded-3xl border border-accent-3/60 bg-primary p-6 shadow-2xl">
+          <div className={`relative z-10 flex w-full max-w-3xl max-h-[85vh] flex-col overflow-hidden rounded-3xl border border-accent-3/60 bg-primary p-6 shadow-2xl ${isModalClosing ? "animate-fly-out" : "animate-fly-in"}`}>
             <div className="flex items-start justify-between gap-4">
                   <div>
                     <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
@@ -282,7 +319,7 @@ const Bills = () => {
                     ) : null}
                     <button
                       type="button"
-                      onClick={() => setSelectedBill(null)}
+                      onClick={() => void closeModal()}
                       className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
                     >
                       Bezárás
@@ -379,7 +416,7 @@ const Bills = () => {
               <div className="flex flex-col gap-2 sm:flex-row sm:items-center">
                 <button
                   type="button"
-                  onClick={() => setSelectedBill(null)}
+                  onClick={() => void closeModal()}
                   className="rounded-full border border-accent-3/60 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
                 >
                   Nyitva hagyás
@@ -389,14 +426,20 @@ const Bills = () => {
                     type="button"
                     onClick={async () => {
                       if (!selectedGroup?.sessionId) return;
-                      const result = await closeSession(selectedGroup.sessionId);
+                      const group = selectedGroup;
+                      const billKey = group.bill;
+                      setConfirmClose(false);
+                      await closeModal();
+                      markBillExiting(billKey);
+                      await sleep(exitDurationMs);
+                      const result = await closeSession(group.sessionId);
                       if (!result.ok) {
                         toast(result.error ?? "Nem sikerült lezárni a számlát.", { type: "error" });
+                        clearBillExiting(billKey);
                         return;
                       }
                       toast("Számla lezárva.", { type: "success" });
-                      setConfirmClose(false);
-                      setSelectedBill(null);
+                      clearBillExiting(billKey);
                     }}
                     className="rounded-full bg-amber-500 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-white shadow-md shadow-amber-500/30 transition hover:-translate-y-0.5 hover:shadow-lg"
                   >

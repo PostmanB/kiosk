@@ -42,6 +42,108 @@
   overflow: hidden;
 }
 
+@keyframes fly-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes fly-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-10px) scale(0.98);
+  }
+}
+
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes fade-out {
+  from {
+    opacity: 1;
+  }
+  to {
+    opacity: 0;
+  }
+}
+
+@keyframes fly-up-out {
+  from {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+  to {
+    opacity: 0;
+    transform: translateY(-120px) scale(0.98);
+  }
+}
+
+@keyframes slide-up-in {
+  from {
+    opacity: 0;
+    transform: translateY(80px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+.animate-fly-in {
+  animation: fly-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  animation-delay: var(--fly-delay, 0ms);
+  will-change: transform, opacity;
+}
+
+.animate-fly-out {
+  animation: fly-out 220ms cubic-bezier(0.4, 0, 1, 1) both;
+  will-change: transform, opacity;
+}
+
+.animate-fade-in {
+  animation: fade-in 220ms ease-out both;
+}
+
+.animate-fade-out {
+  animation: fade-out 200ms ease-in both;
+}
+
+.animate-fly-up-out {
+  animation: fly-up-out 300ms cubic-bezier(0.4, 0, 1, 1) both;
+  will-change: transform, opacity;
+}
+
+.animate-slide-up-in {
+  animation: slide-up-in 320ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  will-change: transform, opacity;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-fly-in,
+  .animate-fly-out,
+  .animate-fade-in,
+  .animate-fade-out,
+  .animate-fly-up-out,
+  .animate-slide-up-in {
+    animation: none;
+  }
+}
+
 * {
   -ms-overflow-style: none;
   scrollbar-width: none;
