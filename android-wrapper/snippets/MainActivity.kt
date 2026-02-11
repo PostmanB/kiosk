@@ -20,8 +20,7 @@ class MainActivity : ComponentActivity() {
       ActivityCompat.requestPermissions(
         this,
         arrayOf(
-          Manifest.permission.BLUETOOTH_CONNECT,
-          Manifest.permission.BLUETOOTH_SCAN
+          Manifest.permission.BLUETOOTH_CONNECT
         ),
         1001
       )
