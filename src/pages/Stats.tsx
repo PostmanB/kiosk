@@ -222,7 +222,7 @@ const Stats = () => {
     <StatsGate>
       <section className="space-y-8">
         <div className="rounded-2xl border border-accent-3/60 bg-accent-2/70 px-4 py-3 text-sm text-contrast/70 shadow-sm">
-          {isLoading ? "Syncing statistics..." : "Statistics overview"}
+          {isLoading ? "Statisztika szinkronizálása..." : "Statisztika áttekintés"}
         </div>
 
         {error ? (
@@ -236,15 +236,15 @@ const Stats = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                  All Time
+                  Összesen
                 </p>
-                <h2 className="text-xl font-semibold text-contrast">Total performance</h2>
+                <h2 className="text-xl font-semibold text-contrast">Összesített teljesítmény</h2>
               </div>
             </div>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
-                  Total sales
+                  Összes értékesítés
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-contrast">
                   {formatCurrency(allTime.totalSales)}
@@ -252,7 +252,7 @@ const Stats = () => {
               </div>
               <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
-                  Items sold
+                  Eladott tételek
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-contrast">
                   {allTime.itemsSold.toLocaleString()}
@@ -265,7 +265,7 @@ const Stats = () => {
             <div className="flex items-center justify-between">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                  This Week
+                  Ezen a héten
                 </p>
                 <h2 className="text-xl font-semibold text-contrast">{weekLabel}</h2>
               </div>
@@ -273,7 +273,7 @@ const Stats = () => {
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
-                  Total sales
+                  Összes értékesítés
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-contrast">
                   {formatCurrency(thisWeek.totalSales)}
@@ -283,14 +283,14 @@ const Stats = () => {
                 >
                   {salesDeltaMeta.arrow}{" "}
                   {salesDelta === 0
-                    ? "No change"
+                    ? "Nincs változás"
                     : `${salesDelta > 0 ? "+" : "-"}${formatCurrency(Math.abs(salesDelta))}`}{" "}
-                  vs last week
+                  az előző héthez képest
                 </p>
               </div>
               <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
-                  Items sold
+                  Eladott tételek
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-contrast">
                   {thisWeek.itemsSold.toLocaleString()}
@@ -300,9 +300,9 @@ const Stats = () => {
                 >
                   {itemsDeltaMeta.arrow}{" "}
                   {itemsDelta === 0
-                    ? "No change"
+                    ? "Nincs változás"
                     : `${itemsDelta > 0 ? "+" : "-"}${Math.abs(itemsDelta).toLocaleString()}`}{" "}
-                  vs last week
+                  az előző héthez képest
                 </p>
               </div>
             </div>
@@ -313,9 +313,9 @@ const Stats = () => {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                Weekly Sales
+                Heti értékesítés
               </p>
-              <h2 className="text-xl font-semibold text-contrast">Last 52 weeks</h2>
+              <h2 className="text-xl font-semibold text-contrast">Utolsó 52 hét</h2>
             </div>
             <div className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
               {weeklyRangeLabel}
@@ -326,7 +326,7 @@ const Stats = () => {
               viewBox={`0 0 ${chart.width} ${chart.height}`}
               className="h-72 w-full"
               role="img"
-              aria-label="Weekly sales chart"
+              aria-label="Heti értékesítés grafikon"
             >
               <line
                 x1={chart.paddingX}
@@ -388,9 +388,9 @@ const Stats = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                Items Sold
+                Eladott tételek
               </p>
-              <h2 className="text-xl font-semibold text-contrast">All time vs this week</h2>
+              <h2 className="text-xl font-semibold text-contrast">Összesen vs ezen a héten</h2>
             </div>
             <div className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
               {weekLabel}
@@ -398,13 +398,13 @@ const Stats = () => {
           </div>
           <div className="mt-4 overflow-hidden rounded-2xl border border-accent-3/60 bg-primary/70">
             <div className="grid grid-cols-[1fr_120px_120px] gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-contrast/60">
-              <span>Item</span>
-              <span className="text-right">All time</span>
-              <span className="text-right">This week</span>
+              <span>Tétel</span>
+              <span className="text-right">Összesen</span>
+              <span className="text-right">Ezen a héten</span>
             </div>
             <div className="max-h-[360px] overflow-y-auto">
               {itemStats.length === 0 ? (
-                <div className="px-4 py-6 text-sm text-contrast/60">No items sold yet.</div>
+                <div className="px-4 py-6 text-sm text-contrast/60">Még nincs eladott tétel.</div>
               ) : (
                 itemStats.map((item) => (
                   <div
@@ -447,9 +447,9 @@ const Stats = () => {
           <div className="flex items-center justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                Sauces Used
+                Felhasznált szószok
               </p>
-              <h2 className="text-xl font-semibold text-contrast">All time vs this week</h2>
+              <h2 className="text-xl font-semibold text-contrast">Összesen vs ezen a héten</h2>
             </div>
             <div className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
               {weekLabel}
@@ -457,13 +457,13 @@ const Stats = () => {
           </div>
           <div className="mt-4 overflow-hidden rounded-2xl border border-accent-3/60 bg-primary/70">
             <div className="grid grid-cols-[1fr_120px_120px] gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-contrast/60">
-              <span>Sauce</span>
-              <span className="text-right">All time</span>
-              <span className="text-right">This week</span>
+              <span>Szósz</span>
+              <span className="text-right">Összesen</span>
+              <span className="text-right">Ezen a héten</span>
             </div>
             <div className="max-h-[360px] overflow-y-auto">
               {sauceStats.length === 0 ? (
-                <div className="px-4 py-6 text-sm text-contrast/60">No sauces used yet.</div>
+                <div className="px-4 py-6 text-sm text-contrast/60">Még nincs felhasznált szósz.</div>
               ) : (
                 sauceStats.map((sauce) => (
                   <div

@@ -1,18 +1,18 @@
 const summaryBlocks = [
   {
-    title: "Docs Placeholder",
+    title: "Dokumentáció helyőrző",
     description:
-      "Link your design system and API docs here. Keep the layout and palette consistent by leaning on accent surfaces.",
+      "Linkeld ide a dizájnrendszeredet és az API dokumentációt. Tartsd egységesen az elrendezést és a palettát akcentus felületekkel.",
   },
   {
-    title: "Component Library",
+    title: "Komponens-könyvtár",
     description:
-      "Showcase reusable widgets with cards that inherit palette tokens. Mix text-contrast with bg-accent-* layers for depth.",
+      "Mutasd be az újrahasznosítható elemeket olyan kártyákkal, amelyek öröklik a paletta tokeneket. Kombináld a text-contrastot a bg-accent-* rétegekkel a mélységhez.",
   },
   {
-    title: "Support Hub",
+    title: "Támogatás",
     description:
-      "Swap this content for FAQs or contact details. The palette ensures headings, body copy, and buttons stay legible.",
+      "Cseréld le ezt a tartalmat GYIK-ra vagy elérhetőségekre. A paletta gondoskodik arról, hogy a címsorok, szövegek és gombok olvashatóak maradjanak.",
   },
 ];
 
@@ -21,22 +21,22 @@ const Test = () => {
     <section className="space-y-10">
       <header className="space-y-4">
         <h1 className="text-3xl font-bold tracking-tight text-contrast sm:text-4xl">
-          Placeholder route, polished visuals.
+          Helyőrző útvonal, csiszolt megjelenés.
         </h1>
         <p className="max-w-2xl text-base text-contrast/80">
-          This page is ready to host Features, Pricing, Docs—whatever you are building next. When you
-          flesh it out, lean on the palette utilities so your typography, surfaces, and callouts feel
-          intentional in both themes.
+          Ez az oldal készen áll funkciók, árazás, dokumentáció vagy bármi következő befogadására. Amikor
+          kibővíted, támaszkodj a paletta utilitykre, hogy a tipográfia, felületek és kiemelések mindkét
+          témában tudatosan összeálljanak.
         </p>
       </header>
 
       <div className="rounded-3xl border border-brand/40 bg-brand/15 p-6 text-sm text-contrast shadow-inner shadow-brand/30">
         <p>
-          Tip: pair <code className="font-mono text-xs">bg-brand/15</code> with{" "}
-          <code className="font-mono text-xs">border-brand/40</code> to spotlight content without
-          overwhelming the layout. Buttons can stay bold with{" "}
-          <code className="font-mono text-xs">bg-brand</code> and neutral body copy should default to{" "}
-          <code className="font-mono text-xs">text-contrast</code>.
+          Tipp: párosítsd a <code className="font-mono text-xs">bg-brand/15</code> réteget a{" "}
+          <code className="font-mono text-xs">border-brand/40</code> szegéllyel, hogy kiemeld a tartalmat
+          anélkül, hogy túlterhelnéd az elrendezést. A gombok maradhatnak erősek a{" "}
+          <code className="font-mono text-xs">bg-brand</code> használatával, a semleges törzsszöveg pedig
+          alapértelmezetten legyen <code className="font-mono text-xs">text-contrast</code>.
         </p>
       </div>
 

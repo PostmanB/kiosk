@@ -5,8 +5,8 @@ const ColorPalette = () => {
     () =>
       [
         {
-          title: "Brand - Rose",
-          description: "Signature brand accent for CTAs and highlights.",
+          title: "Márka - Rózsa",
+          description: "Jellegzetes márka-akcentus CTA-khoz és kiemelésekhez.",
           items: [
             {
               label: "Brand",
@@ -18,9 +18,9 @@ const ColorPalette = () => {
           ],
         },
         {
-          title: "Primary - Surface",
+          title: "Alap - Felület",
           description:
-            "Default surface tone for cards, inputs, and backgrounds.",
+            "Alap felületi árnyalat kártyákhoz, mezőkhöz és hátterekhez.",
           items: [
             {
               label: "Primary",
@@ -32,9 +32,9 @@ const ColorPalette = () => {
           ],
         },
         {
-          title: "Accent 1 - Softest Neutral",
+          title: "Akcentus 1 - Leglágyabb semleges",
           description:
-            "Lightest supporting neutral; darkest base in dark mode.",
+            "A legvilágosabb kiegészítő semleges; sötét módban a legsötétebb alap.",
           items: [
             {
               label: "Accent 1",
@@ -46,9 +46,9 @@ const ColorPalette = () => {
           ],
         },
         {
-          title: "Accent 2 - Soft Neutral",
+          title: "Akcentus 2 - Lágy semleges",
           description:
-            "Secondary surface shade for cards and subtle separators.",
+            "Másodlagos felületi árnyalat kártyákhoz és finom elválasztókhoz.",
           items: [
             {
               label: "Accent 2",
@@ -60,9 +60,9 @@ const ColorPalette = () => {
           ],
         },
         {
-          title: "Accent 3 - Mid Neutral",
+          title: "Akcentus 3 - Közepes semleges",
           description:
-            "Mid-tone neutral that works for borders and muted backgrounds.",
+            "Középtónusú semleges, amely jól működik szegélyekhez és tompított hátterekhez.",
           items: [
             {
               label: "Accent 3",
@@ -74,9 +74,9 @@ const ColorPalette = () => {
           ],
         },
         {
-          title: "Accent 4 - Deep Neutral",
+          title: "Akcentus 4 - Mély semleges",
           description:
-            "Highest contrast neutral, ideal for typography and icons.",
+            "A legnagyobb kontrasztú semleges, ideális tipográfiához és ikonokhoz.",
           items: [
             {
               label: "Accent 4",
@@ -88,9 +88,9 @@ const ColorPalette = () => {
           ],
         },
         {
-          title: "Contrast - Text",
+          title: "Kontraszt - Szöveg",
           description:
-            "Dedicated contrast token for body text and essential iconography.",
+            "Külön kontraszt token törzsszöveghez és alapvető ikonokhoz.",
           items: [
             {
               label: "Contrast",
@@ -132,10 +132,10 @@ const ColorPalette = () => {
             {token}
           </code>
           <span className="font-mono text-[0.7rem] text-contrast/60">
-            Light {lightHex}
+            Világos {lightHex}
           </span>
           <span className="font-mono text-[0.7rem] text-contrast/60">
-            Dark {darkHex}
+            Sötét {darkHex}
           </span>
         </div>
         <span className="text-[0.65rem] uppercase tracking-wide text-contrast/60">
@@ -156,14 +156,15 @@ const ColorPalette = () => {
             id="color-palette-heading"
             className="text-lg font-semibold text-contrast"
           >
-            Color Palette
+            Színpaletta
           </h2>
           <p className="text-sm text-contrast/80">
-            These brand and neutral tokens live in <code>src/style.css</code>{" "}
-            and map into Tailwind through <code>tailwind.config.ts</code>. Use
-            utilities such as <code>text-brand</code>, <code>bg-primary</code>,
-            and <code>border-accent-3/60</code>; they adapt automatically to
-            dark mode.
+            Ezek a márka- és semleges tokenek a <code>src/style.css</code>{" "}
+            fájlban élnek, és a <code>tailwind.config.ts</code> fájlon keresztül
+            térképeződnek be a Tailwindbe. Használj olyan utilityket, mint a{" "}
+            <code>text-brand</code>, <code>bg-primary</code> és{" "}
+            <code>border-accent-3/60</code>; ezek automatikusan alkalmazkodnak a
+            sötét módhoz.
           </p>
         </div>
 

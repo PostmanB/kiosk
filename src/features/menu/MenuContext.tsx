@@ -105,7 +105,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
           saucesRes.error?.message ||
           sidesRes.error?.message ||
           itemsRes.error?.message ||
-          "Unable to load menu."
+          "A menü betöltése sikertelen."
       );
       setIsLoading(false);
       return;
@@ -164,7 +164,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
     async (name: string) => {
       const trimmed = name.trim();
       if (!trimmed) {
-        return { ok: false, error: "Category name is required." };
+        return { ok: false, error: "A kategória neve kötelező." };
       }
       const { error: insertError } = await supabase
         .from(TABLES.categories)
@@ -199,7 +199,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
     async (name: string) => {
       const trimmed = name.trim();
       if (!trimmed) {
-        return { ok: false, error: "Sauce name is required." };
+        return { ok: false, error: "A szósz neve kötelező." };
       }
       const { error: insertError } = await supabase.from(TABLES.sauces).insert({ name: trimmed });
       if (insertError) {
@@ -232,7 +232,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
     async (name: string) => {
       const trimmed = name.trim();
       if (!trimmed) {
-        return { ok: false, error: "Side name is required." };
+        return { ok: false, error: "A köret neve kötelező." };
       }
       const { error: insertError } = await supabase.from(TABLES.sides).insert({ name: trimmed });
       if (insertError) {
@@ -250,13 +250,13 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
     async (input: AddItemInput) => {
       const trimmedName = input.name.trim();
       if (!trimmedName) {
-        return { ok: false, error: "Item name is required." };
+        return { ok: false, error: "A tétel neve kötelező." };
       }
       if (!input.category_id) {
-        return { ok: false, error: "Pick a category for the item." };
+        return { ok: false, error: "Válassz kategóriát a tételhez." };
       }
       if (!Number.isFinite(input.price) || input.price < 0) {
-        return { ok: false, error: "Enter a valid price." };
+        return { ok: false, error: "Adj meg érvényes árat." };
       }
 
       const { error: insertError } = await supabase.from(TABLES.items).insert({
@@ -288,7 +288,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
     async (id: string, name: string) => {
       const trimmed = name.trim();
       if (!trimmed) {
-        return { ok: false, error: "Category name is required." };
+        return { ok: false, error: "A kategória neve kötelező." };
       }
       const { error: updateError } = await supabase
         .from(TABLES.categories)
@@ -309,7 +309,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
     async (id: string, name: string) => {
       const trimmed = name.trim();
       if (!trimmed) {
-        return { ok: false, error: "Sauce name is required." };
+        return { ok: false, error: "A szósz neve kötelező." };
       }
       const { error: updateError } = await supabase
         .from(TABLES.sauces)
@@ -330,7 +330,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
     async (id: string, name: string) => {
       const trimmed = name.trim();
       if (!trimmed) {
-        return { ok: false, error: "Side name is required." };
+        return { ok: false, error: "A köret neve kötelező." };
       }
       const { error: updateError } = await supabase
         .from(TABLES.sides)
@@ -351,13 +351,13 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
     async (input: AddItemInput & { id: string }) => {
       const trimmedName = input.name.trim();
       if (!trimmedName) {
-        return { ok: false, error: "Item name is required." };
+        return { ok: false, error: "A tétel neve kötelező." };
       }
       if (!input.category_id) {
-        return { ok: false, error: "Pick a category for the item." };
+        return { ok: false, error: "Válassz kategóriát a tételhez." };
       }
       if (!Number.isFinite(input.price) || input.price < 0) {
-        return { ok: false, error: "Enter a valid price." };
+        return { ok: false, error: "Adj meg érvényes árat." };
       }
 
       const { error: updateError } = await supabase
@@ -451,7 +451,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
 export const useMenu = () => {
   const context = useContext(MenuContext);
   if (!context) {
-    throw new Error("useMenu must be used within a MenuProvider.");
+    throw new Error("A useMenu csak MenuProvideren belül használható.");
   }
   return context;
 };

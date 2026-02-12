@@ -123,7 +123,7 @@ export const OrdersProvider = ({ children }: { children: React.ReactNode }) => {
       .filter((item) => item.name.length > 0);
 
     if (!table.trim() || cleanedItems.length === 0) {
-      return { ok: false, error: "Missing table or items." };
+      return { ok: false, error: "Hiányzik az asztal vagy a tételek." };
     }
 
     const { error: insertError } = await supabase.from(TABLE_NAME).insert({
@@ -238,7 +238,7 @@ export const OrdersProvider = ({ children }: { children: React.ReactNode }) => {
 export const useOrders = () => {
   const context = useContext(OrdersContext);
   if (!context) {
-    throw new Error("useOrders must be used within an OrdersProvider.");
+    throw new Error("A useOrders csak OrdersProvideren belül használható.");
   }
   return context;
 };

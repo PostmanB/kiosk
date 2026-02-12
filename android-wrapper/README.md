@@ -14,7 +14,7 @@ This folder holds the minimal native wrapper needed for silent Bluetooth printin
    `app/src/main/java/com/kiosk/printbridge/`
 4. Update these values:
    - `kioskUrl` in `MainActivity.kt`
-   - `printerMac` in `PrinterBridge.kt`
+   - `printerTarget` in `PrinterBridge.kt` (prefer MAC address)
 5. Pair the printer in Android Bluetooth settings.
 6. Build and install the app on the tablet.
 
@@ -23,15 +23,16 @@ Add these permissions to `AndroidManifest.xml`:
 - `android.permission.BLUETOOTH`
 - `android.permission.BLUETOOTH_ADMIN`
 - `android.permission.BLUETOOTH_CONNECT`
-- `android.permission.BLUETOOTH_SCAN`
 
-At runtime, the app requests `BLUETOOTH_CONNECT` and `BLUETOOTH_SCAN` on Android 12+.
+At runtime, the app requests `BLUETOOTH_CONNECT` on Android 12+.
 
 ## Bridge Methods
 The website calls these methods:
 - `window.AndroidPrinter.printKitchenTicket(payloadJson)`
 - `window.AndroidPrinter.printBill(payloadJson)`
 - `window.AndroidPrinter.getStatus()` -> JSON string
+- `window.AndroidPrinter.getPairedPrinters()` -> JSON string
+- `window.AndroidPrinter.setPrinterTarget("DC:0D:30:F6:BE:CC")`
 
 ## Payload Shapes
 Kitchen ticket:

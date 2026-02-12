@@ -7,12 +7,7 @@ import { useSessions } from "../features/sessions/SessionsContext";
 import type { MenuItem } from "../features/menu/MenuContext";
 import { toast } from "react-toastify";
 import useLockBodyScroll from "../hooks/useLockBodyScroll";
-import {
-  getPrinterStatus,
-  isAndroidPrinterAvailable,
-  printKitchenTicket,
-  type PrinterStatus,
-} from "../lib/printing";
+import { printKitchenTicket } from "../lib/printing";
 
 type MenuModifierGroup = {
   id: string;
@@ -29,15 +24,53 @@ type CartItem = {
 };
 
 const formatCurrency = (value: number) => `EUR ${value.toFixed(2)}`;
+const TAKEAWAY_VALUE = "Takeaway";
+const TAKEAWAY_LABEL = "Elvitel";
+const NO_SAUCE_VALUE = "No sauce";
+const NO_SIDE_VALUE = "No side";
+const MODIFIER_LABELS = {
+  Sauce: "Szósz",
+  Side: "Köret",
+  Extras: "Extrák",
+} as const;
+const MODIFIER_VALUE_LABELS = {
+  [NO_SAUCE_VALUE]: "Szósz nélkül",
+  [NO_SIDE_VALUE]: "Köret nélkül",
+} as const;
+const SIDE_CATEGORY_NAMES = ["sides", "köretek"];
+const DRINKS_CATEGORY_NAMES = ["drinks", "italok"];
+
+const formatModifierGroup = (group: string) =>
+  MODIFIER_LABELS[group as keyof typeof MODIFIER_LABELS] ?? group;
+const formatModifierValue = (value: string) =>
+  MODIFIER_VALUE_LABELS[value as keyof typeof MODIFIER_VALUE_LABELS] ?? value;
+const isExtraGroup = (group: string) => /extra|extrá/i.test(group);
+const isTakeaway = (value: string) => {
+  const normalized = value.trim().toLowerCase();
+  return (
+    normalized === TAKEAWAY_VALUE.toLowerCase() ||
+    normalized === TAKEAWAY_LABEL.toLowerCase()
+  );
+};
+const isSideCategoryName = (name: string) =>
+  SIDE_CATEGORY_NAMES.includes(name.trim().toLowerCase());
+const isDrinksCategoryName = (name: string) =>
+  DRINKS_CATEGORY_NAMES.includes(name.trim().toLowerCase());
+const formatCategoryName = (name: string) => {
+  const normalized = name.trim().toLowerCase();
+  if (normalized === "sides") return "Köretek";
+  if (normalized === "drinks") return "Italok";
+  return name;
+};
 const fallbackIconName = "ph:fork-knife";
 const COMMON_EXTRAS = [
-  "No onion",
-  "No veggies",
-  "No tomato",
-  "No lettuce",
-  "No pickles",
-  "No cheese",
-  "Extra sauce",
+  "Hagyma nélkül",
+  "Zöldség nélkül",
+  "Paradicsom nélkül",
+  "Saláta nélkül",
+  "Uborka nélkül",
+  "Sajt nélkül",
+  "Extra szósz",
 ];
 
 const normalizeModifiers = (modifiers: Record<string, string[]>) => {
@@ -69,10 +102,12 @@ const formatModifierLines = (modifiers?: Record<string, string[]>) => {
   return Object.entries(modifiers)
     .flatMap(([group, values]) => {
       if (!values || values.length === 0) return [];
+      const label = formatModifierGroup(group);
+      const displayValues = values.map((value) => formatModifierValue(value));
       return [
         {
-          text: `${group}: ${values.join(", ")}`,
-          isExtra: /extra/i.test(group),
+          text: `${label}: ${displayValues.join(", ")}`,
+          isExtra: isExtraGroup(group),
         },
       ];
     })
@@ -91,23 +126,23 @@ const buildModifierGroups = (
   if (item.allow_sauces && !isDrinkItem) {
     groups.push({
       id: "Sauce",
-      label: "Sauce",
+      label: "Szósz",
       type: "multi",
-      options: ["No sauce", ...sauces.map((sauce) => sauce.name)],
+      options: [NO_SAUCE_VALUE, ...sauces.map((sauce) => sauce.name)],
     });
   }
   if (item.allow_sides && !isSideItem) {
     groups.push({
       id: "Side",
-      label: "Side",
+      label: "Köret",
       type: "single",
-      options: ["No side", ...sideOptions],
+      options: [NO_SIDE_VALUE, ...sideOptions],
     });
   }
   if (!isSideItem && !isDrinkItem && COMMON_EXTRAS.length > 0) {
     groups.push({
       id: "Extras",
-      label: "Extras",
+      label: "Extrák",
       type: "multi",
       options: COMMON_EXTRAS,
     });
@@ -149,11 +184,11 @@ const Cashier = () => {
     error: menuError,
   } = useMenu();
   const { sessions, createSession, closeSession } = useSessions();
-  const takeawayLabel = "Takeaway";
+  const takeawayLabel = TAKEAWAY_LABEL;
   const portalTarget = typeof document !== "undefined" ? document.body : null;
 
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
-  const [table, setTable] = useState(takeawayLabel);
+  const [table, setTable] = useState(TAKEAWAY_VALUE);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
   const [billTable, setBillTable] = useState<string | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
@@ -162,9 +197,10 @@ const Cashier = () => {
   const [selectedQty, setSelectedQty] = useState(1);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [orderStep, setOrderStep] = useState<1 | 2 | 3>(1);
-  const [printerStatus, setPrinterStatus] = useState<PrinterStatus | null>(null);
-  const resolvedTable = table.trim() || takeawayLabel;
-  const billInputValue = table === takeawayLabel ? "" : table;
+  const [panelTransition, setPanelTransition] = useState<"idle" | "out" | "in">("idle");
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const resolvedTable = table.trim() || TAKEAWAY_VALUE;
+  const billInputValue = isTakeaway(table) ? "" : table;
 
   const notify = (message: string, tone: "info" | "success" | "error" = "info") => {
     setFeedback(message);
@@ -172,11 +208,11 @@ const Cashier = () => {
   };
 
   const sideCategory = useMemo(
-    () => categories.find((category) => category.name.trim().toLowerCase() === "sides"),
+    () => categories.find((category) => isSideCategoryName(category.name)),
     [categories]
   );
   const drinksCategory = useMemo(
-    () => categories.find((category) => category.name.trim().toLowerCase() === "drinks"),
+    () => categories.find((category) => isDrinksCategoryName(category.name)),
     [categories]
   );
   const activeItems = useMemo(
@@ -239,9 +275,9 @@ const Cashier = () => {
 
   const cartTotal = useMemo(() => {
     return cartItems.reduce((sum, item) => {
-      const sideName = item.modifiers.Side?.[0];
+      const sideName = item.modifiers["Side"]?.[0];
       const sidePrice =
-        sideName && sideName !== "No side" ? sidePriceByName.get(sideName) ?? 0 : 0;
+        sideName && sideName !== NO_SIDE_VALUE ? sidePriceByName.get(sideName) ?? 0 : 0;
       return sum + item.quantity * (item.menuItem.price + sidePrice);
     }, 0);
   }, [cartItems, sidePriceByName]);
@@ -323,6 +359,12 @@ const Cashier = () => {
   }, [openSessions]);
 
   useEffect(() => {
+    if (isTakeaway(resolvedTable)) {
+      const existing =
+        sessionByTable.get(TAKEAWAY_VALUE) ?? sessionByTable.get(TAKEAWAY_LABEL) ?? null;
+      setActiveSessionId(existing?.id ?? null);
+      return;
+    }
     const existing = sessionByTable.get(resolvedTable);
     setActiveSessionId(existing?.id ?? null);
   }, [resolvedTable, sessionByTable]);
@@ -333,57 +375,6 @@ const Cashier = () => {
     }
   }, [activeCategoryId, categories]);
 
-  useEffect(() => {
-    if (!isAndroidPrinterAvailable()) return;
-    const poll = () => {
-      const status = getPrinterStatus();
-      setPrinterStatus(status ?? { state: "unknown" });
-    };
-    poll();
-    const intervalId = window.setInterval(poll, 3000);
-    return () => window.clearInterval(intervalId);
-  }, []);
-
-  const printerBadge = useMemo(() => {
-    if (!printerStatus) return null;
-    switch (printerStatus.state) {
-      case "connected":
-        return {
-          label: "Printer connected",
-          className: "border-emerald-400/50 bg-emerald-500/15 text-emerald-200",
-        };
-      case "connecting":
-        return {
-          label: "Printer connecting",
-          className: "border-amber-400/60 bg-amber-500/10 text-amber-200",
-        };
-      case "retrying":
-        return {
-          label: "Printer retrying",
-          className: "border-amber-400/60 bg-amber-500/10 text-amber-200",
-        };
-      case "idle":
-        return {
-          label: "Printer idle",
-          className: "border-slate-400/50 bg-slate-500/10 text-slate-200",
-        };
-      case "disconnected":
-        return {
-          label: "Printer offline",
-          className: "border-rose-400/60 bg-rose-500/10 text-rose-200",
-        };
-      case "error":
-        return {
-          label: "Printer error",
-          className: "border-rose-400/60 bg-rose-500/10 text-rose-200",
-        };
-      default:
-        return {
-          label: "Printer unknown",
-          className: "border-slate-400/50 bg-slate-500/10 text-slate-200",
-        };
-    }
-  }, [printerStatus]);
 
   const resetDetailPanel = () => {
     setSelectedItem(null);
@@ -402,9 +393,9 @@ const Cashier = () => {
     const defaults: Record<string, string[]> = {};
     groups.forEach((group) => {
       if (group.type === "single") {
-        defaults[group.label] = [group.options[0]];
+        defaults[group.id] = [group.options[0]];
       } else {
-        defaults[group.label] = [];
+        defaults[group.id] = [];
       }
     });
     setSelectedItem(item);
@@ -414,24 +405,24 @@ const Cashier = () => {
 
   const toggleModifier = (group: MenuModifierGroup, option: string) => {
     setSelectedModifiers((prev) => {
-      const existing = prev[group.label] ?? [];
+      const existing = prev[group.id] ?? [];
       if (group.type === "single") {
-        return { ...prev, [group.label]: [option] };
+        return { ...prev, [group.id]: [option] };
       }
-      if (group.label === "Sauce") {
-        if (option === "No sauce") {
-          return { ...prev, [group.label]: ["No sauce"] };
+      if (group.id === "Sauce") {
+        if (option === NO_SAUCE_VALUE) {
+          return { ...prev, [group.id]: [NO_SAUCE_VALUE] };
         }
-        const withoutNoSauce = existing.filter((value) => value !== "No sauce");
+        const withoutNoSauce = existing.filter((value) => value !== NO_SAUCE_VALUE);
         const next = withoutNoSauce.includes(option)
           ? withoutNoSauce.filter((value) => value !== option)
           : [...withoutNoSauce, option];
-        return { ...prev, [group.label]: next };
+        return { ...prev, [group.id]: next };
       }
       const next = existing.includes(option)
         ? existing.filter((value) => value !== option)
         : [...existing, option];
-      return { ...prev, [group.label]: next };
+      return { ...prev, [group.id]: next };
     });
   };
 
@@ -478,19 +469,28 @@ const Cashier = () => {
     setCartItems((prev) => prev.filter((item) => item.id !== id));
   };
 
+  const panelExitDurationMs = 300;
+  const panelEnterDurationMs = 320;
+  const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
   const handleSubmit = async () => {
+    if (isSubmitting || panelTransition !== "idle") return;
+    setIsSubmitting(true);
+
     if (cartItems.length === 0) {
-      notify("Select at least one menu item before submitting.", "error");
+      notify("V?lassz legal?bb egy t?telt a bek?ld?shez.", "error");
+      setIsSubmitting(false);
       return;
     }
 
     const tableName = resolvedTable;
-    const isTakeaway = tableName === takeawayLabel;
+    const isTakeawayOrder = isTakeaway(tableName);
     let sessionId = activeSessionId;
     if (!sessionId) {
       const created = await createSession(tableName);
       if (!created.ok || !created.session) {
-        notify(created.error ?? "Unable to open a session.", "error");
+        notify(created.error ?? "Nem siker?lt munkamenetet nyitni.", "error");
+        setIsSubmitting(false);
         return;
       }
       sessionId = created.session.id;
@@ -506,8 +506,8 @@ const Cashier = () => {
         modifiers: item.modifiers,
         price:
           item.menuItem.price +
-          (item.modifiers.Side?.[0] && item.modifiers.Side?.[0] !== "No side"
-            ? sidePriceByName.get(item.modifiers.Side[0]) ?? 0
+          (item.modifiers["Side"]?.[0] && item.modifiers["Side"]?.[0] !== NO_SIDE_VALUE
+            ? sidePriceByName.get(item.modifiers["Side"][0]) ?? 0
             : 0),
         registerCode: item.menuItem.register_code ?? undefined,
         showInKitchen: item.menuItem.show_in_kitchen,
@@ -515,7 +515,8 @@ const Cashier = () => {
     });
 
     if (!result.ok) {
-      notify(result.error ?? "Unable to send order right now.", "error");
+      notify(result.error ?? "A rendel?st most nem lehet elk?ldeni.", "error");
+      setIsSubmitting(false);
       return;
     }
 
@@ -529,31 +530,51 @@ const Cashier = () => {
         paperWidthMm: 58,
       });
       if (printResult.supported && !printResult.ok) {
-        toast("Kitchen printer not responding. Check Bluetooth.", { type: "error" });
+        toast("A konyhai nyomtat? nem v?laszol. Ellen?rizd a Bluetooth-t.", { type: "error" });
       }
     }
 
     let closeError: string | null = null;
-    if (isTakeaway && sessionId) {
+    if (isTakeawayOrder && sessionId) {
       const closeResult = await closeSession(sessionId);
       if (!closeResult.ok) {
-        closeError = closeResult.error ?? "Unable to close takeaway bill.";
+        closeError = closeResult.error ?? "Nem siker?lt lez?rni az elviteles sz?ml?t.";
       }
     }
 
-    setTable(takeawayLabel);
-    setCartItems([]);
     if (closeError) {
-      notify(`Order sent, but ${closeError}`, "error");
+      notify(`Rendel?s elk?ldve, de ${closeError}`, "error");
     } else {
       notify(
-        isTakeaway ? "Order sent and takeaway bill closed." : "Order sent to the kitchen.",
+        isTakeawayOrder
+          ? "Rendel?s elk?ldve, ?s az elviteles sz?mla lez?rva."
+          : "Rendel?s elk?ldve a konyh?ra.",
         "success"
       );
     }
+
+    setPanelTransition("out");
+    await sleep(panelExitDurationMs);
+
+    setTable(TAKEAWAY_VALUE);
+    setCartItems([]);
     setOrderStep(1);
     setActiveSessionId(null);
+
+    setPanelTransition("in");
+    await sleep(panelEnterDurationMs);
+    setPanelTransition("idle");
+    setIsSubmitting(false);
   };
+
+  const panelAnimationClass =
+    panelTransition === "out"
+      ? "animate-fly-up-out"
+      : panelTransition === "in"
+        ? "animate-slide-up-in"
+        : "";
+  const panelIsAnimating = panelTransition !== "idle";
+  const panelIsLocked = isSubmitting || panelIsAnimating;
 
   return (
     <section className="space-y-10">
@@ -564,15 +585,8 @@ const Cashier = () => {
       ) : null}
 
       <div className="flex flex-wrap gap-3 rounded-3xl border border-accent-3/60 bg-accent-1/70 p-4 text-xs font-semibold uppercase tracking-[0.2em] text-contrast/70">
-        <span className={orderStep === 1 ? "text-brand" : ""}>1. Items</span>
-        <span className={orderStep === 2 ? "text-brand" : ""}>2. Bill & Send</span>
-        {printerBadge ? (
-          <span
-            className={`rounded-full border px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.2em] ${printerBadge.className}`}
-          >
-            {printerBadge.label}
-          </span>
-        ) : null}
+        <span className={orderStep === 1 ? "text-brand" : ""}>1. Tételek</span>
+        <span className={orderStep === 2 ? "text-brand" : ""}>2. Számla és küldés</span>
       </div>
 
       <div className="grid gap-8 lg:grid-cols-[1.4fr_0.6fr]">
@@ -583,9 +597,9 @@ const Cashier = () => {
                 <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h3 className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
-                      Top sellers
+                      Legnépszerűbbek
                     </h3>
-                    <span className="text-xs text-contrast/50">All time</span>
+                    <span className="text-xs text-contrast/50">Összesen</span>
                   </div>
                   <div className="grid gap-3 grid-cols-2 sm:grid-cols-3 lg:grid-cols-5">
                     {topSellers.map((entry) => {
@@ -619,7 +633,7 @@ const Cashier = () => {
                                   {entry.name}
                                 </p>
                                 <p className="text-[10px] text-contrast/60">
-                                  {entry.quantity.toLocaleString()} sold
+                                  {entry.quantity.toLocaleString()} eladva
                                 </p>
                               </div>
                             </div>
@@ -634,7 +648,7 @@ const Cashier = () => {
               <div className="flex flex-wrap gap-3">
                 {categories.length === 0 ? (
                   <span className="text-sm text-contrast/60">
-                    No menu categories yet. Add them in Admin.
+                    Még nincs menükategória. Add hozzá az Adminban.
                   </span>
                 ) : (
                   categories.map((category) => (
@@ -648,7 +662,7 @@ const Cashier = () => {
                           : "border-accent-3/60 text-contrast/70 hover:border-brand/40 hover:text-brand"
                       }`}
                     >
-                      {category.name}
+                      {formatCategoryName(category.name)}
                     </button>
                   ))
                 )}
@@ -657,7 +671,7 @@ const Cashier = () => {
               <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
                 {itemsForCategory.length === 0 ? (
                   <div className="rounded-3xl border border-dashed border-accent-3/60 bg-accent-1/80 p-6 text-sm text-contrast/60">
-                    No items in this category yet.
+                    Még nincs tétel ebben a kategóriában.
                   </div>
                 ) : (
                   itemsForCategory.map((item) => {
@@ -681,7 +695,7 @@ const Cashier = () => {
                       {!isActive ? (
                         <span className="pointer-events-none absolute inset-0">
                           <span className="absolute left-1/2 top-1/2 w-[200%] -translate-x-1/2 -translate-y-1/2 -rotate-[18deg] text-center text-3xl font-extrabold uppercase tracking-[0.35em] text-rose-500">
-                            Sold out
+                            Elfogyott
                           </span>
                         </span>
                       ) : null}
@@ -709,10 +723,10 @@ const Cashier = () => {
                         </div>
                         <div className="mt-4 flex items-center justify-between text-xs text-contrast/60">
                           <span>
-                            {item.allow_sauces || item.allow_sides ? "Customize" : "Quick add"}
+                            {item.allow_sauces || item.allow_sides ? "Testreszabás" : "Gyors hozzáadás"}
                           </span>
                           <span className={isActive ? "text-brand/70 transition group-hover:text-brand" : "text-contrast/50"}>
-                            {isActive ? "Tap to add" : "Disabled"}
+                            {isActive ? "Érintsd meg a hozzáadáshoz" : "Inaktív"}
                           </span>
                         </div>
                       </div>
@@ -724,13 +738,13 @@ const Cashier = () => {
             </>
           ) : (
             <div className="rounded-3xl border border-accent-3/60 bg-accent-1/80 p-8 text-sm text-contrast/70">
-              <h2 className="text-xl font-semibold text-contrast">Review order</h2>
+              <h2 className="text-xl font-semibold text-contrast">Rendelés ellenőrzése</h2>
               <p className="mt-2">
-                Check totals and register codes before sending.
+                Ellenőrizd az összegeket és a regiszterkódokat küldés előtt.
               </p>
               <div className="mt-6 space-y-3">
                 {reviewLines.length === 0 ? (
-                  <p className="text-sm text-contrast/60">No items in the order.</p>
+                  <p className="text-sm text-contrast/60">Nincsenek tételek a rendelésben.</p>
                 ) : (
                   reviewLines.map((line) => (
                     <div
@@ -740,7 +754,7 @@ const Cashier = () => {
                       <div>
                         <p className="font-semibold">{line.quantity}x {line.name}</p>
                         <p className="text-xs text-contrast/60">
-                          Code {line.registerCode ?? "—"}
+                          Kód {line.registerCode ?? "—"}
                         </p>
                       </div>
                     </div>
@@ -751,12 +765,12 @@ const Cashier = () => {
           )}
         </section>
 
-        <aside className="space-y-6 rounded-3xl border border-accent-3/60 bg-accent-2/70 p-6 shadow-lg shadow-accent-4/20">
+        <aside className={`space-y-6 rounded-3xl border border-accent-3/60 bg-accent-2/70 p-6 shadow-lg shadow-accent-4/20 ${panelAnimationClass} ${panelIsAnimating ? "pointer-events-none" : ""}`} aria-busy={panelIsLocked}>
           {orderStep === 2 ? (
             <div className="space-y-4">
               <div>
                 <label className="text-sm font-semibold text-contrast/80" htmlFor="table">
-                  Bill name (optional)
+                  Számla neve (opcionális)
                 </label>
                 <input
                   id="table"
@@ -766,20 +780,20 @@ const Cashier = () => {
                     if (nextValue.trim()) {
                       setTable(nextValue);
                     } else {
-                      setTable(takeawayLabel);
+                      setTable(TAKEAWAY_VALUE);
                     }
                   }}
                   className="mt-3 w-full rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast outline-none transition focus:border-brand/60"
-                  placeholder="e.g. Window 1, Marek"
+                  placeholder="pl. Ablak 1, Marek"
                   autoComplete="off"
                 />
                 <p className="mt-2 text-xs text-contrast/60">
-                  Leave empty for takeaway. Enter a name to open a bill.
+                  Hagyd üresen elvitelhez. Adj nevet a számla megnyitásához.
                 </p>
               </div>
               {activeSessionId && billInputValue.trim() ? (
                 <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-100">
-                  Open bill active
+                  Nyitott számla aktív
                 </div>
               ) : null}
 
@@ -790,19 +804,23 @@ const Cashier = () => {
           <div className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-contrast/80">
-                Current order
+                Aktuális rendelés
               </h3>
-              <span className="text-xs text-contrast/60">{cartItems.length} items</span>
+              <span className="text-xs text-contrast/60">{cartItems.length} tétel</span>
             </div>
             {existingItems.length > 0 ? (
               <div className="space-y-3">
                 <p className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
-                  Existing items
+                  Meglévő tételek
                 </p>
                 {existingItems.map((item, index) => {
                   const modifierLines = Object.entries(item.modifiers ?? {})
                     .filter(([, values]) => values.length > 0)
-                    .map(([group, values]) => `${group}: ${values.join(", ")}`);
+                    .map(([group, values]) => {
+                      const label = formatModifierGroup(group);
+                      const displayValues = values.map((value) => formatModifierValue(value));
+                      return `${label}: ${displayValues.join(", ")}`;
+                    });
                   return (
                     <div
                       key={`existing-${index}`}
@@ -831,22 +849,28 @@ const Cashier = () => {
 
             {cartItems.length === 0 ? (
               <p className="rounded-2xl border border-dashed border-accent-3/60 bg-primary/70 p-4 text-sm text-contrast/60">
-                Choose items from the menu cards to start the order.
+                Válassz tételeket a menükártyákról a rendelés indításához.
               </p>
             ) : (
               <div className="space-y-3">
                 {existingItems.length > 0 ? (
                   <p className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
-                    New items
+                    Új tételek
                   </p>
                 ) : null}
                 {cartItems.map((item) => {
                   const modifierLines = Object.entries(item.modifiers)
                     .filter(([, values]) => values.length > 0)
-                    .map(([group, values]) => `${group}: ${values.join(", ")}`);
-                  const sideName = item.modifiers.Side?.[0];
+                    .map(([group, values]) => {
+                      const label = formatModifierGroup(group);
+                      const displayValues = values.map((value) => formatModifierValue(value));
+                      return `${label}: ${displayValues.join(", ")}`;
+                    });
+                  const sideName = item.modifiers["Side"]?.[0];
                   const sidePrice =
-                    sideName && sideName !== "No side" ? sidePriceByName.get(sideName) ?? 0 : 0;
+                    sideName && sideName !== NO_SIDE_VALUE
+                      ? sidePriceByName.get(sideName) ?? 0
+                      : 0;
                   const unitPrice = item.menuItem.price + sidePrice;
                   return (
                     <div
@@ -867,7 +891,7 @@ const Cashier = () => {
                           onClick={() => removeCartItem(item.id)}
                           className="text-[11px] font-semibold uppercase tracking-wide text-rose-300 transition hover:text-rose-200"
                         >
-                          Remove
+                          Eltávolítás
                         </button>
                       </div>
                       <div className="mt-3 flex items-center justify-between text-xs text-contrast/70">
@@ -901,14 +925,14 @@ const Cashier = () => {
 
           <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast/70">
             <div className="flex items-center justify-between">
-              <span>Total</span>
+              <span>Összesen</span>
               <span className="text-base font-semibold text-contrast">
                 {formatCurrency(combinedTotal)}
               </span>
             </div>
             {existingItems.length > 0 ? (
               <p className="mt-1 text-[11px] text-contrast/60">
-                Includes {formatCurrency(existingTotal)} from existing items.
+                Tartalmaz {formatCurrency(existingTotal)} értéket a meglévő tételekből.
               </p>
             ) : null}
           </div>
@@ -923,15 +947,16 @@ const Cashier = () => {
                   type="button"
                   onClick={() => {
                     if (cartItems.length === 0 && existingItems.length === 0) {
-                      notify("Add at least one item to continue.", "error");
+                      notify("Adj hozzá legalább egy tételt a folytatáshoz.", "error");
                       return;
                     }
                     setFeedback(null);
                     setOrderStep(2);
                   }}
-                  className="inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg"
+                  disabled={panelIsLocked}
+                  className="inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  Bill & send
+                  Számla és küldés
                 </button>
               </>
             ) : (
@@ -939,31 +964,34 @@ const Cashier = () => {
                 <button
                   type="button"
                   onClick={handleSubmit}
-                  className="inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg"
+                  disabled={panelIsLocked}
+                  className="inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  Send to kitchen
+                  Küldés a konyhára
                 </button>
                 <button
                   type="button"
                   onClick={() => setOrderStep(1)}
-                  className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                  disabled={panelIsLocked}
+                  className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand disabled:cursor-not-allowed disabled:opacity-70"
                 >
-                  Back to items
+                  Vissza a tételekhez
                 </button>
               </>
             )}
             <button
               type="button"
               onClick={() => {
-                setTable(takeawayLabel);
+                setTable(TAKEAWAY_VALUE);
                 setCartItems([]);
                 setFeedback(null);
                 setOrderStep(1);
                 setActiveSessionId(null);
               }}
-              className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+              disabled={panelIsLocked}
+              className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand disabled:cursor-not-allowed disabled:opacity-70"
             >
-              Clear order
+              Rendelés törlése
             </button>
           </div>
         </aside>
@@ -974,7 +1002,7 @@ const Cashier = () => {
             <div className="fixed inset-0 z-[80] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4">
           <button
             type="button"
-            aria-label="Close"
+            aria-label="Bezárás"
             className="absolute inset-0"
             onClick={resetDetailPanel}
           />
@@ -989,7 +1017,7 @@ const Cashier = () => {
                 </div>
                 <div>
                   <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                    Customize
+                    Testreszabás
                   </p>
                   <h2 className="text-2xl font-semibold text-contrast">{selectedItem.name}</h2>
                   {selectedItem.description ? (
@@ -1006,21 +1034,24 @@ const Cashier = () => {
               <div className="mt-6 space-y-5">
                 {detailGroups.map((group) => (
                   <div key={group.id} className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <h3 className="text-sm font-semibold text-contrast">{group.label}</h3>
-                      <span className="text-xs text-contrast/60">
-                        {group.type === "single" ? "Choose one" : "Choose any"}
-                      </span>
-                    </div>
-                    <div className="flex flex-wrap gap-2">
-                      {group.options.map((option) => {
-                        const isSelected = (selectedModifiers[group.label] ?? []).includes(option);
+                  <div className="flex items-center justify-between">
+                    <h3 className="text-sm font-semibold text-contrast">{group.label}</h3>
+                    <span className="text-xs text-contrast/60">
+                        {group.type === "single" ? "Válassz egyet" : "Válassz tetszőlegesen"}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {group.options.map((option) => {
+                        const isSelected = (selectedModifiers[group.id] ?? []).includes(option);
                         const sidePrice =
-                          group.label === "Side" && option !== "No side"
+                          group.id === "Side" && option !== NO_SIDE_VALUE
                             ? sidePriceByName.get(option)
                             : undefined;
+                        const labelBase = formatModifierValue(option);
                         const optionLabel =
-                          sidePrice !== undefined ? `${option} (+${formatCurrency(sidePrice)})` : option;
+                          sidePrice !== undefined
+                            ? `${labelBase} (+${formatCurrency(sidePrice)})`
+                            : labelBase;
                         return (
                           <button
                             key={option}
@@ -1042,7 +1073,7 @@ const Cashier = () => {
               </div>
             ) : (
               <p className="mt-6 text-sm text-contrast/70">
-                No customizations for this item. Add it straight to the order.
+                Ehhez a tételhez nincs testreszabás. Add hozzá közvetlenül a rendeléshez.
               </p>
             )}
 
@@ -1072,14 +1103,14 @@ const Cashier = () => {
                   onClick={resetDetailPanel}
                   className="rounded-full border border-accent-3/60 px-5 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
                 >
-                  Cancel
+                  Mégse
                 </button>
                 <button
                   type="button"
                   onClick={handleAddToCart}
                   className="rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg"
                 >
-                  Add to order
+                  Hozzáadás a rendeléshez
                 </button>
               </div>
             </div>
@@ -1094,7 +1125,7 @@ const Cashier = () => {
             <div className="fixed inset-0 z-[80] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4">
           <button
             type="button"
-            aria-label="Close"
+            aria-label="Bezárás"
             className="absolute inset-0"
             onClick={() => setBillTable(null)}
           />
@@ -1102,13 +1133,15 @@ const Cashier = () => {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                  Open bill
+                  Nyitott számla
                 </p>
                 <h2 className="text-2xl font-semibold text-contrast">
-                  {billGroup.table === takeawayLabel ? takeawayLabel : `Bill ${billGroup.table}`}
+                  {isTakeaway(billGroup.table)
+                    ? takeawayLabel
+                    : `Számla ${billGroup.table}`}
                 </h2>
                 <p className="mt-1 text-xs text-contrast/60">
-                  {billGroup.ordersCount} order{billGroup.ordersCount === 1 ? "" : "s"}
+                  {billGroup.ordersCount} rendelés
                 </p>
               </div>
               <div className="flex flex-wrap gap-2">
@@ -1117,15 +1150,15 @@ const Cashier = () => {
                   onClick={async () => {
                     const result = await closeSession(billGroup.sessionId);
                     if (!result.ok) {
-                      notify(result.error ?? "Unable to close bill.", "error");
+                      notify(result.error ?? "Nem sikerült lezárni a számlát.", "error");
                       return;
                     }
-                    notify("Bill closed.", "success");
+                    notify("Számla lezárva.", "success");
                     setBillTable(null);
                   }}
                   className="rounded-full border border-amber-400/40 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300 hover:text-amber-50"
                 >
-                  Close bill
+                  Számla lezárása
                 </button>
                 <button
                   type="button"
@@ -1137,14 +1170,14 @@ const Cashier = () => {
                   }}
                   className="rounded-full bg-brand px-3 py-1 text-xs font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5"
                 >
-                  Add items
+                  Tételek hozzáadása
                 </button>
                 <button
                   type="button"
                   onClick={() => setBillTable(null)}
                   className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
                 >
-                  Close
+                  Bezárás
                 </button>
               </div>
             </div>
@@ -1152,7 +1185,7 @@ const Cashier = () => {
             <div className="mt-6 grid flex-1 min-h-0 gap-6 overflow-hidden lg:grid-cols-[1.2fr_0.8fr]">
               <section className="no-scrollbar min-h-0 space-y-3 overflow-y-auto pr-2">
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-contrast/70">
-                  Detailed items
+                  Részletes tételek
                 </h3>
                 <div className="space-y-3">
                   {billGroup.items.map((item, index) => {
@@ -1193,7 +1226,7 @@ const Cashier = () => {
               <aside className="no-scrollbar min-h-0 space-y-4 overflow-y-auto pr-2">
                 <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast/70">
                   <div className="flex items-center justify-between">
-                    <span>Total</span>
+                    <span>Összesen</span>
                     <span className="text-base font-semibold text-contrast">
                       {formatCurrency(
                         billGroup.items.reduce(
@@ -1206,10 +1239,10 @@ const Cashier = () => {
                 </div>
                 <div className="space-y-3">
                   <h3 className="text-sm font-semibold uppercase tracking-wide text-contrast/70">
-                    Summary
+                    Összegzés
                   </h3>
                   {billSummaryLines.length === 0 ? (
-                    <p className="text-sm text-contrast/60">No items in this bill.</p>
+                    <p className="text-sm text-contrast/60">Nincs tétel ezen a számlán.</p>
                   ) : (
                     <div className="space-y-2">
                       {billSummaryLines.map((line) => (
@@ -1221,7 +1254,7 @@ const Cashier = () => {
                             {line.quantity}x {line.name}
                           </p>
                           <p className="text-xs text-contrast/60">
-                            Code {line.registerCode ?? "—"}
+                            Kód {line.registerCode ?? "—"}
                           </p>
                         </div>
                       ))}
