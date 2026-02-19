@@ -91,7 +91,13 @@ object EscPosFormatter {
 
     val table = root.optString("table", "Table")
     val openedAt = root.optString("openedAt", "")
+    val takeawayNumber = root.optInt("takeawayNumber", 0)
     if (table.isNotBlank()) writeLine(out, table)
+    if (takeawayNumber > 0) {
+      out.write(boldOn)
+      writeLine(out, "TAKEAWAY #${takeawayNumber.toString().padStart(3, '0')}")
+      out.write(boldOff)
+    }
     if (openedAt.isNotBlank()) writeLine(out, openedAt)
     writeLine(out, "")
 

@@ -175,6 +175,8 @@ const buildReviewLines = (items: { name: string; quantity: number; registerCode?
   return Array.from(map.values());
 };
 
+const formatTakeawayNumber = (value: number) => `#${String(value).padStart(3, "0")}`;
+
 const Cashier = () => {
   const { orders, addOrder, error: ordersError } = useOrders();
   const {
@@ -472,6 +474,17 @@ const Cashier = () => {
   const panelExitDurationMs = 300;
   const panelEnterDurationMs = 320;
   const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+  const nextTakeawayNumber = useMemo(() => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const todaysTakeawayOrders = orders.filter((order) => {
+      if (!isTakeaway(order.table)) return false;
+      const createdAt = new Date(order.createdAt);
+      return createdAt >= start && createdAt < end;
+    });
+    return todaysTakeawayOrders.length + 1;
+  }, [orders]);
 
   const handleSubmit = async () => {
     if (isSubmitting || panelTransition !== "idle") return;
@@ -485,6 +498,7 @@ const Cashier = () => {
 
     const tableName = resolvedTable;
     const isTakeawayOrder = isTakeaway(tableName);
+    const takeawayNumber = isTakeawayOrder ? nextTakeawayNumber : undefined;
     let sessionId = activeSessionId;
     if (!sessionId) {
       const created = await createSession(tableName);
@@ -527,6 +541,7 @@ const Cashier = () => {
         table: tableName,
         createdAt: new Date().toISOString(),
         items: kitchenItems,
+        takeawayNumber,
         paperWidthMm: 58,
       });
       if (printResult.supported && !printResult.ok) {
@@ -794,6 +809,11 @@ const Cashier = () => {
               {activeSessionId && billInputValue.trim() ? (
                 <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-100">
                   Nyitott számla aktív
+                </div>
+              ) : null}
+              {isTakeaway(resolvedTable) ? (
+                <div className="rounded-2xl border border-brand/30 bg-brand/10 px-4 py-3 text-sm text-brand">
+                  Elviteles sorszám: <span className="font-semibold">{formatTakeawayNumber(nextTakeawayNumber)}</span>
                 </div>
               ) : null}
 

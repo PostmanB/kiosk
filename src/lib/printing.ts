@@ -9,6 +9,7 @@ export type KitchenTicketPayload = {
   table: string;
   createdAt: string;
   items: KitchenTicketItem[];
+  takeawayNumber?: number;
   paperWidthMm?: number;
 };
 
@@ -25,6 +26,7 @@ export type BillPayload = {
   table: string;
   openedAt?: string;
   items: BillItem[];
+  takeawayNumber?: number;
   total?: number;
   currency?: string;
   paperWidthMm?: number;
