@@ -30,7 +30,7 @@ class MainActivity : ComponentActivity() {
     webView.settings.javaScriptEnabled = true
     webView.settings.domStorageEnabled = true
     webView.webViewClient = WebViewClient()
-    webView.addJavascriptInterface(PrinterBridge(), "AndroidPrinter")
+        webView.addJavascriptInterface(PrinterBridge(applicationContext), "AndroidPrinter")
     webView.loadUrl(kioskUrl)
 
     setContentView(webView)

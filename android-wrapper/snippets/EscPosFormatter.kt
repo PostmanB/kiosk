@@ -4,11 +4,15 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.ByteArrayOutputStream
 import java.nio.charset.Charset
+import java.nio.charset.CharsetEncoder
 import kotlin.math.min
 
 object EscPosFormatter {
   private const val lineWidth = 32
-  private val charset: Charset = Charsets.UTF_8
+  // XP-T58K class printers usually expect legacy ESC/POS code tables, not UTF-8 bytes.
+  private val charset: Charset = runCatching { Charset.forName("CP852") }
+    .getOrElse { Charset.forName("windows-1250") }
+  private val encoder: CharsetEncoder = charset.newEncoder()
 
   private val init = byteArrayOf(0x1B, 0x40)
   private val alignLeft = byteArrayOf(0x1B, 0x61, 0x00)
@@ -16,13 +20,17 @@ object EscPosFormatter {
   private val boldOn = byteArrayOf(0x1B, 0x45, 0x01)
   private val boldOff = byteArrayOf(0x1B, 0x45, 0x00)
   private val cut = byteArrayOf(0x1D, 0x56, 0x01)
+  // ESC t n -> select character table. 18 is commonly CP852 on ESC/POS clones.
+  private val codeTableCp852 = byteArrayOf(0x1B, 0x74, 0x12)
   private val lf = byteArrayOf(0x0A)
+  private const val billFeedLines = 4
 
   fun kitchenTicket(payloadJson: String): ByteArray {
     val root = JSONObject(payloadJson)
     val out = ByteArrayOutputStream()
 
     out.write(init)
+    out.write(codeTableCp852)
     out.write(alignCenter)
     out.write(boldOn)
     writeLine(out, "KITCHEN")
@@ -31,7 +39,13 @@ object EscPosFormatter {
 
     val table = root.optString("table", "Table")
     val createdAt = root.optString("createdAt", "")
+    val takeawayNumber = root.optInt("takeawayNumber", 0)
     if (table.isNotBlank()) writeLine(out, table)
+    if (takeawayNumber > 0) {
+      out.write(boldOn)
+      writeLine(out, "TAKEAWAY #${takeawayNumber.toString().padStart(3, '0')}")
+      out.write(boldOff)
+    }
     if (createdAt.isNotBlank()) writeLine(out, createdAt)
     writeLine(out, "")
 
@@ -57,6 +71,7 @@ object EscPosFormatter {
       }
     }
 
+    writeLine(out, "-".repeat(lineWidth))
     out.write(lf)
     out.write(cut)
     return out.toByteArray()
@@ -67,6 +82,7 @@ object EscPosFormatter {
     val out = ByteArrayOutputStream()
 
     out.write(init)
+    out.write(codeTableCp852)
     out.write(alignCenter)
     out.write(boldOn)
     writeLine(out, "BILL")
@@ -121,14 +137,21 @@ object EscPosFormatter {
       writeLine(out, totalLine)
     }
 
-    out.write(lf)
+    feedLines(out, billFeedLines)
     out.write(cut)
     return out.toByteArray()
   }
 
   private fun writeLine(out: ByteArrayOutputStream, text: String) {
-    out.write(text.toByteArray(charset))
+    val safeText = text.map { ch -> if (encoder.canEncode(ch)) ch else '?' }.joinToString("")
+    out.write(safeText.toByteArray(charset))
     out.write(lf)
+  }
+
+  private fun feedLines(out: ByteArrayOutputStream, count: Int) {
+    repeat(maxOf(0, count)) {
+      out.write(lf)
+    }
   }
 
   private fun wrapLines(text: String): List<String> {

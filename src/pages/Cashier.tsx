@@ -478,7 +478,7 @@ const Cashier = () => {
     setIsSubmitting(true);
 
     if (cartItems.length === 0) {
-      notify("V?lassz legal?bb egy t?telt a bek?ld?shez.", "error");
+      notify("Válassz legalább egy tételt a beküldéshez.", "error");
       setIsSubmitting(false);
       return;
     }
@@ -489,7 +489,7 @@ const Cashier = () => {
     if (!sessionId) {
       const created = await createSession(tableName);
       if (!created.ok || !created.session) {
-        notify(created.error ?? "Nem siker?lt munkamenetet nyitni.", "error");
+        notify(created.error ?? "Nem sikerült munkamenetet nyitni.", "error");
         setIsSubmitting(false);
         return;
       }
@@ -515,7 +515,7 @@ const Cashier = () => {
     });
 
     if (!result.ok) {
-      notify(result.error ?? "A rendel?st most nem lehet elk?ldeni.", "error");
+      notify(result.error ?? "A rendelést most nem lehet elküldeni.", "error");
       setIsSubmitting(false);
       return;
     }
@@ -530,7 +530,7 @@ const Cashier = () => {
         paperWidthMm: 58,
       });
       if (printResult.supported && !printResult.ok) {
-        toast("A konyhai nyomtat? nem v?laszol. Ellen?rizd a Bluetooth-t.", { type: "error" });
+        toast("A konyhai nyomtató nem válaszol. Ellenőrizd a Bluetooth-t.", { type: "error" });
       }
     }
 
@@ -538,17 +538,17 @@ const Cashier = () => {
     if (isTakeawayOrder && sessionId) {
       const closeResult = await closeSession(sessionId);
       if (!closeResult.ok) {
-        closeError = closeResult.error ?? "Nem siker?lt lez?rni az elviteles sz?ml?t.";
+        closeError = closeResult.error ?? "Nem sikerült lezárni az elviteles számlát.";
       }
     }
 
     if (closeError) {
-      notify(`Rendel?s elk?ldve, de ${closeError}`, "error");
+      notify(`Rendelés elküldve, de ${closeError}`, "error");
     } else {
       notify(
         isTakeawayOrder
-          ? "Rendel?s elk?ldve, ?s az elviteles sz?mla lez?rva."
-          : "Rendel?s elk?ldve a konyh?ra.",
+          ? "Rendelés elküldve, és az elviteles számla lezárva."
+          : "Rendelés elküldve a konyhára.",
         "success"
       );
     }
