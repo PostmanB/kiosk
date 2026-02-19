@@ -39,7 +39,7 @@ class PrinterBridge(private val appContext: Context) {
       try {
         val payload = JSONObject(payloadJson)
         val table = payload.optString("table", "")
-        if (isTakeaway(table)) {
+        if (isTakeaway(table) && payload.optInt("takeawayNumber", 0) <= 0) {
           payload.put("takeawayNumber", nextTakeawayNumber())
         }
         val data = EscPosFormatter.kitchenTicket(payload.toString())
@@ -54,7 +54,12 @@ class PrinterBridge(private val appContext: Context) {
   fun printBill(payloadJson: String) {
     executor.execute {
       try {
-        val data = EscPosFormatter.bill(payloadJson)
+        val payload = JSONObject(payloadJson)
+        val table = payload.optString("table", "")
+        if (isTakeaway(table) && payload.optInt("takeawayNumber", 0) <= 0) {
+          payload.put("takeawayNumber", nextTakeawayNumber())
+        }
+        val data = EscPosFormatter.bill(payload.toString())
         BluetoothPrinter.print(printerTarget, data)
       } catch (error: Exception) {
         Log.e("PrinterBridge", "Bill print failed", error)

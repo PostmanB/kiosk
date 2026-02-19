@@ -82,6 +82,12 @@ const buildSummaryLines = (
   return Array.from(map.values());
 };
 
+const getTakeawayDayNumber = (ordersForDay: { id: string }[], orderId: string) => {
+  const index = ordersForDay.findIndex((order) => order.id === orderId);
+  return index >= 0 ? index + 1 : null;
+};
+
+const formatTakeawayNumber = (value: number) => `#${String(value).padStart(3, "0")}`;
 const formatBillLabel = (value: string) =>
   isTakeaway(value) ? TAKEAWAY_LABEL : `Számla ${value}`;
 
@@ -98,6 +104,19 @@ const Bills = () => {
   const modalExitDurationMs = 220;
 
   const billGroups = useMemo(() => {
+    const now = new Date();
+    const start = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const end = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const todaysTakeawayOrders = orders
+      .filter((order) => {
+        if (!isTakeaway(order.table)) return false;
+        const createdAt = new Date(order.createdAt);
+        return createdAt >= start && createdAt < end;
+      })
+      .slice()
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .map((order) => ({ id: order.id }));
+
     const openSessions = sessions.filter((session) => session.status === "open");
     return openSessions
       .map((session) => {
@@ -108,6 +127,13 @@ const Bills = () => {
           (item) => typeof item.price === "number" && !Number.isNaN(item.price)
         );
         const itemCount = items.reduce((sum, item) => sum + item.quantity, 0);
+        const firstOrder = sessionOrders
+          .slice()
+          .sort((a, b) => a.createdAt.localeCompare(b.createdAt))[0];
+        const takeawayNumber =
+          firstOrder && isTakeaway(session.table)
+            ? getTakeawayDayNumber(todaysTakeawayOrders, firstOrder.id)
+            : null;
         return {
           bill: session.table,
           sessionId: session.id,
@@ -117,6 +143,7 @@ const Bills = () => {
           total,
           showTotal,
           itemCount,
+          takeawayNumber,
         };
       })
       .filter((group) => group.ordersCount > 0)
@@ -183,6 +210,7 @@ const Bills = () => {
         modifiers: item.modifiers,
         registerCode: item.registerCode ?? null,
       })),
+      takeawayNumber: selectedGroup.takeawayNumber ?? undefined,
       total: selectedGroup.showTotal ? selectedGroup.total : undefined,
       currency: "EUR",
       paperWidthMm: 58,
@@ -245,6 +273,11 @@ const Bills = () => {
                     <div className="flex items-start justify-between gap-3">
                       <div>
                         <p className="text-lg font-semibold">{formatBillLabel(group.bill)}</p>
+                        {group.takeawayNumber ? (
+                          <p className="text-[11px] font-semibold text-brand/80">
+                            Elvitel {formatTakeawayNumber(group.takeawayNumber)}
+                          </p>
+                        ) : null}
                         <p className="text-xs text-contrast/60">
                           Megnyitva {formatTime(group.openedAt)} ? {group.itemCount} tétel
                         </p>
@@ -302,6 +335,11 @@ const Bills = () => {
                     <h2 className="text-2xl font-semibold text-contrast">
                       {formatBillLabel(selectedGroup.bill)}
                     </h2>
+                    {selectedGroup.takeawayNumber ? (
+                      <p className="mt-1 text-xs font-semibold text-brand/80">
+                        Elviteles sorszám: {formatTakeawayNumber(selectedGroup.takeawayNumber)}
+                      </p>
+                    ) : null}
                     <p className="mt-1 text-xs text-contrast/60">
                       {selectedGroup.ordersCount} rendelés ? Megnyitva{" "}
                       {formatTime(selectedGroup.openedAt)}
