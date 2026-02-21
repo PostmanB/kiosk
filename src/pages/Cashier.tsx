@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@iconify/react";
 import { useOrders } from "../features/orders/OrdersContext";
@@ -202,6 +202,14 @@ const Cashier = () => {
   const [orderStep, setOrderStep] = useState<1 | 2 | 3>(1);
   const [panelTransition, setPanelTransition] = useState<"idle" | "out" | "in">("idle");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [swipeOffsets, setSwipeOffsets] = useState<Record<string, number>>({});
+  const swipeRef = useRef<{
+    itemId: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    active: boolean;
+  } | null>(null);
   const resolvedTable = table.trim() || TAKEAWAY_VALUE;
   const billInputValue = isTakeaway(table) ? "" : table;
 
@@ -253,6 +261,10 @@ const Cashier = () => {
     if (!activeCategoryId) return [];
     return items.filter((item) => item.category_id === activeCategoryId);
   }, [items, activeCategoryId]);
+  const activeCategoryName = useMemo(
+    () => categories.find((category) => category.id === activeCategoryId)?.name ?? null,
+    [categories, activeCategoryId]
+  );
 
   const topSellers = useMemo(() => {
     const counts = new Map<string, number>();
@@ -488,6 +500,58 @@ const Cashier = () => {
 
   const removeCartItem = (id: string) => {
     setCartItems((prev) => prev.filter((item) => item.id !== id));
+    setSwipeOffsets((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
+  const handleCartSwipeStart = (itemId: string, event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "touch") return;
+    swipeRef.current = {
+      itemId,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      active: true,
+    };
+  };
+
+  const handleCartSwipeMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const current = swipeRef.current;
+    if (!current) return;
+    if (event.pointerId !== current.pointerId) return;
+    if (!current.active) return;
+
+    const deltaX = event.clientX - current.startX;
+    const deltaY = event.clientY - current.startY;
+    if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 8) {
+      current.active = false;
+      setSwipeOffsets((prev) => ({ ...prev, [current.itemId]: 0 }));
+      return;
+    }
+
+    if (deltaX < 0) {
+      const clamped = Math.max(-128, deltaX);
+      setSwipeOffsets((prev) => ({ ...prev, [current.itemId]: clamped }));
+      event.preventDefault();
+    }
+  };
+
+  const handleCartSwipeEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    const current = swipeRef.current;
+    if (!current) return;
+    if (event.pointerId !== current.pointerId) return;
+
+    const offset = swipeOffsets[current.itemId] ?? 0;
+    if (offset <= -96) {
+      removeCartItem(current.itemId);
+    } else {
+      setSwipeOffsets((prev) => ({ ...prev, [current.itemId]: 0 }));
+    }
+    swipeRef.current = null;
   };
 
   const panelExitDurationMs = 300;
@@ -679,95 +743,119 @@ const Cashier = () => {
                 </div>
               ) : null}
 
-              <div className="flex flex-wrap gap-3">
-                {categories.length === 0 ? (
-                  <span className="text-sm text-contrast/60">
-                    Még nincs menükategória. Add hozzá az Adminban.
+              <div className="sticky top-2 z-20 rounded-3xl border border-accent-3/60 bg-gradient-to-r from-accent-1/95 via-accent-2/85 to-accent-1/95 p-4 shadow-lg shadow-accent-4/20 backdrop-blur">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-[0.25em] text-brand/80">
+                    Kategóriák
+                  </h3>
+                  <span className="text-[11px] font-semibold uppercase tracking-wide text-contrast/60">
+                    {categories.length} csoport
                   </span>
-                ) : (
-                  categories.map((category) => (
-                    <button
-                      key={category.id}
-                      type="button"
-                      onClick={() => setActiveCategoryId(category.id)}
-                      className={`rounded-full border px-4 py-2 text-sm font-semibold uppercase tracking-wide transition ${
-                        activeCategoryId === category.id
-                          ? "border-brand/50 bg-brand/15 text-brand"
-                          : "border-accent-3/60 text-contrast/70 hover:border-brand/40 hover:text-brand"
-                      }`}
-                    >
-                      {formatCategoryName(category.name)}
-                    </button>
-                  ))
-                )}
+                </div>
+                <div className="mt-3 flex flex-wrap gap-3">
+                  {categories.length === 0 ? (
+                    <span className="text-sm text-contrast/60">
+                      Még nincs menükategória. Add hozzá az Adminban.
+                    </span>
+                  ) : (
+                    categories.map((category) => (
+                      <button
+                        key={category.id}
+                        type="button"
+                        onClick={() => setActiveCategoryId(category.id)}
+                        className={`rounded-full border px-4 py-2 text-sm font-semibold uppercase tracking-wide transition ${
+                          activeCategoryId === category.id
+                            ? "border-brand bg-brand text-white shadow-md shadow-brand/30"
+                            : "border-accent-3/60 bg-primary/60 text-contrast/70 hover:border-brand/40 hover:text-brand"
+                        }`}
+                      >
+                        {formatCategoryName(category.name)}
+                      </button>
+                    ))
+                  )}
+                </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {itemsForCategory.length === 0 ? (
-                  <div className="rounded-3xl border border-dashed border-accent-3/60 bg-accent-1/80 p-6 text-sm text-contrast/60">
-                    Még nincs tétel ebben a kategóriában.
+              <div className="rounded-3xl border border-accent-3/60 bg-accent-1/70 p-5 shadow-lg shadow-accent-4/15">
+                <div className="flex items-center justify-between gap-4 border-b border-accent-3/50 pb-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand/80">Tételek</p>
+                    <h3 className="text-base font-semibold text-contrast">
+                      {activeCategoryName ? formatCategoryName(activeCategoryName) : "Válassz kategóriát"}
+                    </h3>
                   </div>
-                ) : (
-                  itemsForCategory.map((item) => {
-                    const isActive = item.is_active !== false;
-                    return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      disabled={!isActive}
-                      onClick={() => {
-                        if (isActive) {
-                          openDetailPanel(item);
-                        }
-                      }}
-                      className={`group relative overflow-hidden rounded-3xl border border-accent-3/60 bg-accent-1/80 p-5 text-left shadow-lg shadow-accent-4/20 transition ${
-                        isActive
-                          ? "hover:-translate-y-1 hover:border-brand/50"
-                          : "cursor-not-allowed"
-                      }`}
-                    >
-                      {!isActive ? (
-                        <span className="pointer-events-none absolute inset-0">
-                          <span className="absolute left-1/2 top-1/2 w-[200%] -translate-x-1/2 -translate-y-1/2 -rotate-[18deg] text-center text-3xl font-extrabold uppercase tracking-[0.35em] text-rose-500">
-                            Elfogyott
+                  <span className="rounded-full border border-accent-3/60 bg-primary/70 px-3 py-1 text-xs font-semibold text-contrast/70">
+                    {itemsForCategory.length} tétel
+                  </span>
+                </div>
+
+                <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {itemsForCategory.length === 0 ? (
+                    <div className="rounded-3xl border border-dashed border-accent-3/60 bg-primary/70 p-6 text-sm text-contrast/60">
+                      Még nincs tétel ebben a kategóriában.
+                    </div>
+                  ) : (
+                    itemsForCategory.map((item) => {
+                      const isActive = item.is_active !== false;
+                      return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        disabled={!isActive}
+                        onClick={() => {
+                          if (isActive) {
+                            openDetailPanel(item);
+                          }
+                        }}
+                        className={`group relative overflow-hidden rounded-3xl border border-accent-3/60 bg-accent-1/80 p-5 text-left shadow-lg shadow-accent-4/20 transition ${
+                          isActive
+                            ? "hover:-translate-y-1 hover:border-brand/50"
+                            : "cursor-not-allowed"
+                        }`}
+                      >
+                        {!isActive ? (
+                          <span className="pointer-events-none absolute inset-0">
+                            <span className="absolute left-1/2 top-1/2 w-[200%] -translate-x-1/2 -translate-y-1/2 -rotate-[18deg] text-center text-3xl font-extrabold uppercase tracking-[0.35em] text-rose-500">
+                              Elfogyott
+                            </span>
                           </span>
-                        </span>
-                      ) : null}
-                      <div className={isActive ? "" : "opacity-35"}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex min-w-0 flex-1 flex-col gap-2">
-                            <h3 className="line-clamp-2 text-lg font-semibold leading-tight text-contrast">
-                              {item.name}
-                            </h3>
-                            <div className="flex min-w-0 items-start gap-3">
-                              <span className="min-w-[88px] flex-shrink-0 rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-center text-xs font-semibold tabular-nums text-brand">
-                                {formatCurrency(item.price)}
-                              </span>
-                              {item.description ? (
-                                <p className="text-xs text-contrast/70">{item.description}</p>
-                              ) : null}
+                        ) : null}
+                        <div className={isActive ? "" : "opacity-35"}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex min-w-0 flex-1 flex-col gap-2">
+                              <h3 className="line-clamp-2 text-lg font-semibold leading-tight text-contrast">
+                                {item.name}
+                              </h3>
+                              <div className="flex min-w-0 items-start gap-3">
+                                <span className="min-w-[88px] flex-shrink-0 rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-center text-xs font-semibold tabular-nums text-brand">
+                                  {formatCurrency(item.price)}
+                                </span>
+                                {item.description ? (
+                                  <p className="text-xs text-contrast/70">{item.description}</p>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl border border-accent-3/60 bg-primary/60">
+                              <Icon
+                                icon={item.icon_name || fallbackIconName}
+                                className="h-6 w-6 text-brand"
+                              />
                             </div>
                           </div>
-                          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl border border-accent-3/60 bg-primary/60">
-                            <Icon
-                              icon={item.icon_name || fallbackIconName}
-                              className="h-6 w-6 text-brand"
-                            />
+                          <div className="mt-4 flex items-center justify-between text-xs text-contrast/60">
+                            <span>
+                              {item.allow_sauces || item.allow_sides ? "Testreszabás" : "Gyors hozzáadás"}
+                            </span>
+                            <span className={isActive ? "text-brand/70 transition group-hover:text-brand" : "text-contrast/50"}>
+                              {isActive ? "Érintsd meg a hozzáadáshoz" : "Inaktív"}
+                            </span>
                           </div>
                         </div>
-                        <div className="mt-4 flex items-center justify-between text-xs text-contrast/60">
-                          <span>
-                            {item.allow_sauces || item.allow_sides ? "Testreszabás" : "Gyors hozzáadás"}
-                          </span>
-                          <span className={isActive ? "text-brand/70 transition group-hover:text-brand" : "text-contrast/50"}>
-                            {isActive ? "Érintsd meg a hozzáadáshoz" : "Inaktív"}
-                          </span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })
-                )}
+                      </button>
+                    );
+                  })
+                  )}
+                </div>
               </div>
             </>
           ) : (
@@ -911,6 +999,7 @@ const Cashier = () => {
                   </p>
                 ) : null}
                 {cartItems.map((item) => {
+                  const swipeOffset = swipeOffsets[item.id] ?? 0;
                   const modifierLines = Object.entries(item.modifiers)
                     .filter(([, values]) => values.length > 0)
                     .map(([group, values]) => {
@@ -925,48 +1014,62 @@ const Cashier = () => {
                       : 0;
                   const unitPrice = item.menuItem.price + sidePrice;
                   return (
-                    <div
-                      key={item.id}
-                      className="rounded-2xl border border-accent-3/60 bg-primary/70 p-4 text-sm text-contrast"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-semibold">{item.menuItem.name}</p>
-                          {modifierLines.length ? (
-                            <div className="mt-1 text-[11px] text-contrast/60">
-                              {modifierLines.join(" | ")}
-                            </div>
-                          ) : null}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeCartItem(item.id)}
-                          className="text-[11px] font-semibold uppercase tracking-wide text-rose-300 transition hover:text-rose-200"
-                        >
-                          Eltávolítás
-                        </button>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between text-xs text-contrast/70">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => updateCartQuantity(item.id, -1)}
-                            className="h-7 w-7 rounded-full border border-accent-3/60 text-base text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                    <div key={item.id} className="relative overflow-hidden rounded-2xl">
+                      <div
+                        className={`absolute inset-0 flex items-center justify-end px-4 transition-colors ${
+                          swipeOffset < -8 ? "bg-rose-500/15" : "bg-transparent"
+                        }`}
+                      />
+                      <div
+                        className="rounded-2xl border border-accent-3/60 bg-primary/70 p-4 text-sm text-contrast transition-transform"
+                        style={{
+                          transform: `translateX(${swipeOffset}px)`,
+                          touchAction: "pan-y",
+                        }}
+                        onPointerDown={(event) => handleCartSwipeStart(item.id, event)}
+                        onPointerMove={handleCartSwipeMove}
+                        onPointerUp={handleCartSwipeEnd}
+                        onPointerCancel={handleCartSwipeEnd}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold">{item.menuItem.name}</p>
+                            {modifierLines.length ? (
+                              <div className="mt-1 text-[11px] text-contrast/60">
+                                {modifierLines.join(" | ")}
+                              </div>
+                            ) : null}
+                          </div>
+                          <span
+                            className={`text-[11px] font-semibold uppercase tracking-wide transition ${
+                              swipeOffset < -8 ? "text-rose-400" : "text-contrast/45"
+                            }`}
                           >
-                            -
-                          </button>
-                          <span className="min-w-[24px] text-center text-sm font-semibold">
-                            {item.quantity}
+                            Eltávolítás
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => updateCartQuantity(item.id, 1)}
-                            className="h-7 w-7 rounded-full border border-accent-3/60 text-base text-contrast/70 transition hover:border-brand/50 hover:text-brand"
-                          >
-                            +
-                          </button>
                         </div>
-                        <span>{formatCurrency(unitPrice * item.quantity)}</span>
+                        <div className="mt-3 flex items-center justify-between text-xs text-contrast/70">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => updateCartQuantity(item.id, -1)}
+                              className="h-7 w-7 rounded-full border border-accent-3/60 text-base text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                            >
+                              -
+                            </button>
+                            <span className="min-w-[24px] text-center text-sm font-semibold">
+                              {item.quantity}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => updateCartQuantity(item.id, 1)}
+                              className="h-7 w-7 rounded-full border border-accent-3/60 text-base text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                            >
+                              +
+                            </button>
+                          </div>
+                          <span>{formatCurrency(unitPrice * item.quantity)}</span>
+                        </div>
                       </div>
                     </div>
                   );
