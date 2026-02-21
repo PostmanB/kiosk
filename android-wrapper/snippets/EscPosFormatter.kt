@@ -24,6 +24,7 @@ object EscPosFormatter {
   private val codeTableCp852 = byteArrayOf(0x1B, 0x74, 0x12)
   private val lf = byteArrayOf(0x0A)
   private const val billFeedLines = 4
+  private const val postCutFeedLines = 3
 
   fun kitchenTicket(payloadJson: String): ByteArray {
     val root = JSONObject(payloadJson)
@@ -145,6 +146,7 @@ object EscPosFormatter {
 
     feedLines(out, billFeedLines)
     out.write(cut)
+    feedLines(out, postCutFeedLines)
     return out.toByteArray()
   }
 
