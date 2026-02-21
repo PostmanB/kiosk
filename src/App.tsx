@@ -9,6 +9,8 @@ import AppRoutes from "./routes/AppRoutes";
 import { Bounce, ToastContainer } from "react-toastify";
 import useDocumentTheme from "./hooks/useDocumentTheme";
 
+const ENABLE_VIRTUAL_KEYBOARD = false;
+
 function App() {
   const isDark = useDocumentTheme();
   const toastTheme = useMemo(() => (isDark ? "dark" : "light"), [isDark]);
@@ -23,7 +25,7 @@ function App() {
               <main className="w-full px-4 pt-6 pb-12">
                 <AppRoutes />
               </main>
-              <VirtualKeyboard />
+              {ENABLE_VIRTUAL_KEYBOARD ? <VirtualKeyboard /> : null}
             </div>
             <ToastContainer
               position="top-center"

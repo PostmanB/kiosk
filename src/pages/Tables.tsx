@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+﻿import { useMemo, useState } from "react";
 import { createPortal } from "react-dom";
 import { useOrders } from "../features/orders/OrdersContext";
 import { useSessions } from "../features/sessions/SessionsContext";
@@ -9,13 +9,13 @@ const TAKEAWAY_LABEL = "Elvitel";
 const NO_SAUCE_VALUE = "No sauce";
 const NO_SIDE_VALUE = "No side";
 const MODIFIER_LABELS = {
-  Sauce: "Szósz",
-  Side: "Köret",
-  Extras: "Extrák",
+  Sauce: "SzÃ³sz",
+  Side: "KÃ¶ret",
+  Extras: "ExtrÃ¡k",
 } as const;
 const MODIFIER_VALUE_LABELS = {
-  [NO_SAUCE_VALUE]: "Szósz nélkül",
-  [NO_SIDE_VALUE]: "Köret nélkül",
+  [NO_SAUCE_VALUE]: "SzÃ³sz nÃ©lkÃ¼l",
+  [NO_SIDE_VALUE]: "KÃ¶ret nÃ©lkÃ¼l",
 } as const;
 
 const formatModifierGroup = (group: string) =>
@@ -119,17 +119,17 @@ const Tables = () => {
       <header className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
         <div>
           <p className="text-sm font-semibold uppercase tracking-[0.3em] text-brand/70">
-            Asztal áttekintés
+            Asztal Ã¡ttekintÃ©s
           </p>
           <h1 className="text-3xl font-bold text-contrast sm:text-4xl">
-            Nézd meg, mit rendelt minden asztal.
+            NÃ©zd meg, mit rendelt minden asztal.
           </h1>
           <p className="mt-2 max-w-2xl text-sm text-contrast/75">
-            Aktív rendelések asztalonként, összesítéssel és módosítókkal.
+            AktÃ­v rendelÃ©sek asztalonkÃ©nt, Ã¶sszesÃ­tÃ©ssel Ã©s mÃ³dosÃ­tÃ³kkal.
           </p>
         </div>
         <div className="rounded-2xl border border-accent-3/60 bg-accent-2/70 px-4 py-3 text-sm text-contrast/70 shadow-sm">
-          {isLoading ? "Rendelések szinkronizálása..." : `${tableGroups.length} aktív asztal`}
+          {isLoading ? "RendelÃ©sek szinkronizÃ¡lÃ¡sa..." : `${tableGroups.length} aktÃ­v asztal`}
         </div>
       </header>
 
@@ -140,12 +140,12 @@ const Tables = () => {
       ) : null}
 
       <div className="rounded-3xl border border-accent-3/60 bg-accent-1/80 p-6 shadow-lg shadow-accent-4/20">
-        <h2 className="text-lg font-semibold text-contrast">Asztaltérkép</h2>
+        <h2 className="text-lg font-semibold text-contrast">AsztaltÃ©rkÃ©p</h2>
         {tableGroups.length === 0 ? (
-          <p className="mt-4 text-sm text-contrast/60">Jelenleg nincs aktív asztal.</p>
+          <p className="mt-4 text-sm text-contrast/60">Jelenleg nincs aktÃ­v asztal.</p>
         ) : (
           <p className="mt-2 text-xs text-contrast/60">
-            Érints meg egy asztalt az összegzéshez.
+            Ã‰rints meg egy asztalt az Ã¶sszegzÃ©shez.
           </p>
         )}
         <div className="mt-4 rounded-3xl border border-accent-3/60 bg-primary/70 p-4">
@@ -210,7 +210,7 @@ const Tables = () => {
             <div className="fixed inset-0 z-[80] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4">
           <button
             type="button"
-            aria-label="Bezárás"
+            aria-label="BezÃ¡rÃ¡s"
             className="absolute inset-0"
             onClick={() => setSelectedTable(null)}
           />
@@ -218,7 +218,7 @@ const Tables = () => {
             <div className="flex items-start justify-between gap-4">
               <div>
                 <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                  Asztal részletei
+                  Asztal rÃ©szletei
                 </p>
                 <h2 className="text-2xl font-semibold text-contrast">
                   {isTakeaway(selectedGroup.table)
@@ -226,7 +226,7 @@ const Tables = () => {
                     : `Asztal ${selectedGroup.table}`}
                 </h2>
                 <p className="mt-1 text-xs text-contrast/60">
-                  {selectedGroup.ordersCount} rendelés
+                  {selectedGroup.ordersCount} rendelÃ©s
                 </p>
               </div>
               <div className="flex items-center gap-2">
@@ -237,16 +237,16 @@ const Tables = () => {
                     await closeSession(selectedGroup.sessionId);
                     setSelectedTable(null);
                   }}
-                  className="rounded-full border border-amber-400/40 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300 hover:text-amber-50"
+                  className="rounded-full border border-amber-400/40 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-900 transition hover:border-amber-500 hover:text-amber-950 dark:text-amber-100 dark:hover:border-amber-300 dark:hover:text-amber-50"
                 >
-                  Számla lezárása
+                  SzÃ¡mla lezÃ¡rÃ¡sa
                 </button>
                 <button
                   type="button"
                   onClick={() => setSelectedTable(null)}
                   className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
                 >
-                  Bezárás
+                  BezÃ¡rÃ¡s
                 </button>
               </div>
             </div>
@@ -254,7 +254,7 @@ const Tables = () => {
             <div className="mt-6 grid flex-1 min-h-0 gap-6 overflow-hidden lg:grid-cols-[1.2fr_0.8fr]">
               <section className="no-scrollbar min-h-0 space-y-3 overflow-y-auto pr-2">
                 <h3 className="text-sm font-semibold uppercase tracking-wide text-contrast/70">
-                  Részletes tételek
+                  RÃ©szletes tÃ©telek
                 </h3>
                 <div className="space-y-3">
                   {selectedGroup.items.map((item, index) => {
@@ -290,7 +290,7 @@ const Tables = () => {
               <aside className="no-scrollbar min-h-0 space-y-4 overflow-y-auto pr-2">
                 <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast/70">
                   <div className="flex items-center justify-between">
-                    <span>Összesen</span>
+                    <span>Ã–sszesen</span>
                     <span className="text-base font-semibold text-contrast">
                       {formatCurrency(
                         selectedGroup.items.reduce(
@@ -303,10 +303,10 @@ const Tables = () => {
                 </div>
                 <div className="space-y-3">
                   <h3 className="text-sm font-semibold uppercase tracking-wide text-contrast/70">
-                    Összegzés
+                    Ã–sszegzÃ©s
                   </h3>
                   {summaryLines.length === 0 ? (
-                    <p className="text-sm text-contrast/60">Nincs tétel ezen az asztalon.</p>
+                    <p className="text-sm text-contrast/60">Nincs tÃ©tel ezen az asztalon.</p>
                   ) : (
                     <div className="space-y-2">
                       {summaryLines.map((line) => (
@@ -318,7 +318,7 @@ const Tables = () => {
                             {line.quantity}x {line.name}
                           </p>
                           <p className="text-xs text-contrast/60">
-                            Kód {line.registerCode ?? "—"}
+                            KÃ³d {line.registerCode ?? "â€”"}
                           </p>
                         </div>
                       ))}

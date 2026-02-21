@@ -192,6 +192,7 @@ const Cashier = () => {
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [table, setTable] = useState(TAKEAWAY_VALUE);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [isAddToBillModalOpen, setIsAddToBillModalOpen] = useState(false);
   const [billTable, setBillTable] = useState<string | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
@@ -319,6 +320,24 @@ const Cashier = () => {
     [sessions]
   );
 
+  const openBillOptions = useMemo(() => {
+    return openSessions
+      .map((session) => {
+        const sessionOrders = orders.filter((order) => order.sessionId === session.id);
+        const itemCount = sessionOrders.reduce(
+          (sum, order) => sum + order.items.reduce((inner, item) => inner + item.quantity, 0),
+          0
+        );
+        return {
+          table: session.table,
+          sessionId: session.id,
+          ordersCount: sessionOrders.length,
+          itemCount,
+        };
+      })
+      .sort((a, b) => a.table.localeCompare(b.table));
+  }, [openSessions, orders]);
+
   const tableGroups = useMemo(() => {
     return openSessions
       .map((session) => {
@@ -342,7 +361,7 @@ const Cashier = () => {
   }, [tableGroups]);
 
   const billGroup = billTable ? tableGroupMap.get(billTable) : null;
-  useLockBodyScroll(Boolean(selectedItem) || Boolean(billGroup));
+  useLockBodyScroll(Boolean(selectedItem) || Boolean(billGroup) || isAddToBillModalOpen);
   const billSummaryLines = useMemo(() => {
     if (!billGroup) return [];
     return buildReviewLines(
@@ -787,27 +806,40 @@ const Cashier = () => {
                 <label className="text-sm font-semibold text-contrast/80" htmlFor="table">
                   Számla neve (opcionális)
                 </label>
-                <input
-                  id="table"
-                  value={billInputValue}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    if (nextValue.trim()) {
-                      setTable(nextValue);
-                    } else {
-                      setTable(TAKEAWAY_VALUE);
-                    }
-                  }}
-                  className="mt-3 w-full rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast outline-none transition focus:border-brand/60"
-                  placeholder="pl. Ablak 1, Marek"
-                  autoComplete="off"
-                />
+                <div className="mt-3 flex items-stretch gap-2">
+                  <input
+                    id="table"
+                    value={billInputValue}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      if (nextValue.trim()) {
+                        setTable(nextValue);
+                      } else {
+                        setTable(TAKEAWAY_VALUE);
+                      }
+                    }}
+                    className="w-full rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast outline-none transition focus:border-brand/60"
+                    placeholder="pl. Ablak 1, Marek"
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsAddToBillModalOpen(true)}
+                    disabled={panelIsLocked || openBillOptions.length === 0}
+                    className="shrink-0 rounded-full border border-accent-3/60 px-3 py-3 text-[11px] font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Hozzadas szamlahoz
+                  </button>
+                </div>
                 <p className="mt-2 text-xs text-contrast/60">
                   Hagyd üresen elvitelhez. Adj nevet a számla megnyitásához.
                 </p>
+                {openBillOptions.length === 0 ? (
+                  <p className="mt-1 text-[11px] text-contrast/50">Jelenleg nincs nyitott számla.</p>
+                ) : null}
               </div>
               {activeSessionId && billInputValue.trim() ? (
-                <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-100">
+                <div className="rounded-2xl border border-amber-400/30 bg-amber-200/60 px-4 py-3 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-100">
                   Nyitott számla aktív
                 </div>
               ) : null}
@@ -1140,6 +1172,76 @@ const Cashier = () => {
           )
         : null}
 
+      {isAddToBillModalOpen && portalTarget
+        ? createPortal(
+            <div className="fixed inset-0 z-[85] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4">
+              <button
+                type="button"
+                aria-label="Bezárás"
+                className="absolute inset-0"
+                onClick={() => setIsAddToBillModalOpen(false)}
+              />
+              <div className="relative z-10 flex w-full max-w-2xl max-h-[85vh] flex-col overflow-hidden rounded-3xl border border-accent-3/60 bg-primary p-6 shadow-2xl">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
+                      Nyitott számlák
+                    </p>
+                    <h2 className="text-2xl font-semibold text-contrast">Hozzadas szamlahoz</h2>
+                    <p className="mt-1 text-xs text-contrast/60">
+                      Válaszd ki, melyik nyitott számlához menjen ez a rendelés.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddToBillModalOpen(false)}
+                    className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                  >
+                    Bezárás
+                  </button>
+                </div>
+
+                <div className="mt-6 no-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto pr-2">
+                  {openBillOptions.length === 0 ? (
+                    <p className="rounded-2xl border border-dashed border-accent-3/60 bg-primary/70 p-4 text-sm text-contrast/60">
+                      Jelenleg nincs nyitott számla.
+                    </p>
+                  ) : (
+                    openBillOptions.map((option) => (
+                      <button
+                        key={option.sessionId}
+                        type="button"
+                        onClick={() => {
+                          setTable(option.table);
+                          setActiveSessionId(option.sessionId);
+                          setIsAddToBillModalOpen(false);
+                          notify("A rendelés a kiválasztott nyitott számlához lesz hozzáadva.", "success");
+                        }}
+                        className="w-full rounded-2xl border border-accent-3/60 bg-accent-1/80 px-4 py-3 text-left text-sm text-contrast transition hover:border-brand/50"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="font-semibold">
+                              {isTakeaway(option.table) ? takeawayLabel : `Számla ${option.table}`}
+                            </p>
+                            <p className="text-xs text-contrast/60">
+                              {option.ordersCount} rendelés • {option.itemCount} tétel
+                            </p>
+                          </div>
+                          <span className="rounded-full bg-brand px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
+                            Kiválasztás
+                          </span>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>,
+            portalTarget
+          )
+        : null}
+
       {billGroup && portalTarget
         ? createPortal(
             <div className="fixed inset-0 z-[80] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4">
@@ -1176,7 +1278,7 @@ const Cashier = () => {
                     notify("Számla lezárva.", "success");
                     setBillTable(null);
                   }}
-                  className="rounded-full border border-amber-400/40 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300 hover:text-amber-50"
+                  className="rounded-full border border-amber-400/40 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-900 transition hover:border-amber-500 hover:text-amber-950 dark:text-amber-100 dark:hover:border-amber-300 dark:hover:text-amber-50"
                 >
                   Számla lezárása
                 </button>

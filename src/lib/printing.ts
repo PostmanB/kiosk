@@ -166,8 +166,23 @@ const callAndroidPrinter = (
   }
 };
 
-export const printKitchenTicket = (payload: KitchenTicketPayload): PrintResult =>
-  callAndroidPrinter("printKitchenTicket", payload);
+export const printKitchenTicket = (payload: KitchenTicketPayload): PrintResult => {
+  const printableItems = payload.items.filter(
+    (item) => item.name.trim().length > 0 && Number.isFinite(item.quantity) && item.quantity > 0
+  );
+
+  // Skip printer call entirely when there is nothing to print, avoiding blank tickets.
+  if (printableItems.length === 0) {
+    const printer = getAndroidPrinter();
+    const supported = Boolean(printer && typeof printer.printKitchenTicket === "function");
+    return { supported, ok: true };
+  }
+
+  return callAndroidPrinter("printKitchenTicket", {
+    ...payload,
+    items: printableItems,
+  });
+};
 
 export const printBill = (payload: BillPayload): PrintResult =>
   callAndroidPrinter("printBill", payload);
