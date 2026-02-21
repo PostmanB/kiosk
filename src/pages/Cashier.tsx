@@ -202,6 +202,7 @@ const Cashier = () => {
   const [orderStep, setOrderStep] = useState<1 | 2 | 3>(1);
   const [panelTransition, setPanelTransition] = useState<"idle" | "out" | "in">("idle");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const cartSectionRef = useRef<HTMLDivElement | null>(null);
   const [swipeOffsets, setSwipeOffsets] = useState<Record<string, number>>({});
   const swipeRef = useRef<{
     itemId: string;
@@ -508,6 +509,35 @@ const Cashier = () => {
     });
   };
 
+  const scrollPageTop = () => {
+    if (typeof window === "undefined") return;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const scrollPageBottom = () => {
+    if (typeof window === "undefined") return;
+    const height = Math.max(
+      document.body.scrollHeight,
+      document.documentElement.scrollHeight
+    );
+    window.scrollTo({ top: height, behavior: "smooth" });
+  };
+
+  const handleGoToBillAndSend = () => {
+    if (cartItems.length === 0 && existingItems.length === 0) {
+      notify("Adj hozzá legalább egy tételt a folytatáshoz.", "error");
+      return;
+    }
+    setFeedback(null);
+    setOrderStep(2);
+    requestAnimationFrame(scrollPageTop);
+  };
+
+  const handleBackToItems = () => {
+    setOrderStep(1);
+    requestAnimationFrame(scrollPageBottom);
+  };
+
   const handleCartSwipeStart = (itemId: string, event: React.PointerEvent<HTMLDivElement>) => {
     if (event.pointerType !== "touch") return;
     swipeRef.current = {
@@ -748,9 +778,20 @@ const Cashier = () => {
                   <h3 className="text-xs font-semibold uppercase tracking-[0.25em] text-brand/80">
                     Kategóriák
                   </h3>
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-contrast/60">
-                    {categories.length} csoport
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-contrast/60">
+                      {categories.length} csoport
+                    </span>
+                    <button
+                      type="button"
+                      onClick={scrollPageBottom}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-accent-3/60 bg-primary/70 text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                      aria-label="Ugrás az aktuális rendeléshez"
+                      title="Ugrás az aktuális rendeléshez"
+                    >
+                      <Icon icon="ph:arrow-down-bold" className="h-4 w-4" />
+                    </button>
+                  </div>
                 </div>
                 <div className="mt-3 flex flex-wrap gap-3">
                   {categories.length === 0 ? (
@@ -871,11 +912,11 @@ const Cashier = () => {
                   reviewLines.map((line) => (
                     <div
                       key={`${line.name}-${line.registerCode ?? "none"}`}
-                      className="flex items-center justify-between rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast"
+                      className="flex items-center justify-between rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-4 text-2xl text-contrast"
                     >
-                      <div>
+                      <div className="flex w-full items-center justify-between gap-3">
                         <p className="font-semibold">{line.quantity}x {line.name}</p>
-                        <p className="text-xs text-contrast/60">
+                        <p className="text-xl text-contrast/80">
                           Kód {line.registerCode ?? "—"}
                         </p>
                       </div>
@@ -936,12 +977,43 @@ const Cashier = () => {
                   Elviteles sorszám: <span className="font-semibold">{formatTakeawayNumber(nextTakeawayNumber)}</span>
                 </div>
               ) : null}
-
-              
+              <div className="grid gap-2 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={panelIsLocked}
+                  className="inline-flex items-center justify-center rounded-full bg-brand px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Küldés a konyhára
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBackToItems}
+                  disabled={panelIsLocked}
+                  className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Vissza
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTable(TAKEAWAY_VALUE);
+                    setCartItems([]);
+                    setFeedback(null);
+                    setOrderStep(1);
+                    setActiveSessionId(null);
+                  }}
+                  disabled={panelIsLocked}
+                  className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Rendelés törlése
+                </button>
+              </div>
             </div>
           ) : null}
 
-          <div className="space-y-3">
+          {orderStep === 1 ? (
+          <div ref={cartSectionRef} className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-contrast/80">
                 Aktuális rendelés
@@ -1077,6 +1149,7 @@ const Cashier = () => {
               </div>
             )}
           </div>
+          ) : null}
 
           <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast/70">
             <div className="flex items-center justify-between">
@@ -1095,60 +1168,32 @@ const Cashier = () => {
           {feedback ? <p className="text-sm text-contrast/70">{feedback}</p> : null}
           {ordersError ? <p className="text-sm text-rose-300">{ordersError}</p> : null}
 
-          <div className="flex flex-col gap-3">
-            {orderStep === 1 ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (cartItems.length === 0 && existingItems.length === 0) {
-                      notify("Adj hozzá legalább egy tételt a folytatáshoz.", "error");
-                      return;
-                    }
-                    setFeedback(null);
-                    setOrderStep(2);
-                  }}
-                  disabled={panelIsLocked}
-                  className="inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  Számla és küldés
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={panelIsLocked}
-                  className="inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  Küldés a konyhára
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOrderStep(1)}
-                  disabled={panelIsLocked}
-                  className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  Vissza a tételekhez
-                </button>
-              </>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                setTable(TAKEAWAY_VALUE);
-                setCartItems([]);
-                setFeedback(null);
-                setOrderStep(1);
-                setActiveSessionId(null);
-              }}
-              disabled={panelIsLocked}
-              className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              Rendelés törlése
-            </button>
-          </div>
+          {orderStep === 1 ? (
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={handleGoToBillAndSend}
+                disabled={panelIsLocked}
+                className="inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Számla és küldés
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTable(TAKEAWAY_VALUE);
+                  setCartItems([]);
+                  setFeedback(null);
+                  setOrderStep(1);
+                  setActiveSessionId(null);
+                }}
+                disabled={panelIsLocked}
+                className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Rendelés törlése
+              </button>
+            </div>
+          ) : null}
         </aside>
       </div>
 
@@ -1498,3 +1543,6 @@ const Cashier = () => {
 };
 
 export default Cashier;
+
+
+
