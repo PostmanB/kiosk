@@ -3,6 +3,7 @@ import { Link, NavLink } from "react-router-dom";
 import { FiLock, FiMenu, FiX } from "react-icons/fi";
 import ThemeToggle from "./ui/ThemeToggle";
 import { PIN_UNLOCK_KEY } from "../features/pin/PinGate";
+import { useOfflineSync } from "../features/offline/OfflineSyncContext";
 import { getPrinterStatus, isAndroidPrinterAvailable, type PrinterStatus } from "../lib/printing";
 
 const navLinks = [
@@ -16,6 +17,7 @@ const navLinks = [
 const Navbar = () => {
   const [isMenuOpen, setIsMenuOpen] = useState(false);
   const [printerStatus, setPrinterStatus] = useState<PrinterStatus | null>(null);
+  const { pendingCount } = useOfflineSync();
   const handleLock = () => {
     localStorage.removeItem(PIN_UNLOCK_KEY);
     window.location.reload();
@@ -91,6 +93,11 @@ const Navbar = () => {
             ))}
           </div>
           <div className="flex items-center gap-3">
+            {pendingCount > 0 ? (
+              <span className="hidden rounded-full border border-amber-500/50 bg-amber-200/70 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-amber-900 dark:border-amber-400/60 dark:bg-amber-400/15 dark:text-amber-100 sm:inline-flex">
+                Szinkronra vár: {pendingCount}
+              </span>
+            ) : null}
             {printerIndicator ? (
               <div
                 className="flex items-center gap-1"

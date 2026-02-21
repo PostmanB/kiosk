@@ -8,6 +8,7 @@ import type { MenuItem } from "../features/menu/MenuContext";
 import { toast } from "react-toastify";
 import useLockBodyScroll from "../hooks/useLockBodyScroll";
 import { printKitchenTicket } from "../lib/printing";
+import { isLikelyOfflineError, useOfflineSync } from "../features/offline/OfflineSyncContext";
 
 type MenuModifierGroup = {
   id: string;
@@ -186,6 +187,7 @@ const Cashier = () => {
     error: menuError,
   } = useMenu();
   const { sessions, createSession, closeSession } = useSessions();
+  const { enqueueOrderSubmission } = useOfflineSync();
   const takeawayLabel = TAKEAWAY_LABEL;
   const portalTarget = typeof document !== "undefined" ? document.body : null;
 
@@ -613,9 +615,55 @@ const Cashier = () => {
     const isTakeawayOrder = isTakeaway(tableName);
     const takeawayNumber = isTakeawayOrder ? nextTakeawayNumber : undefined;
     let sessionId = activeSessionId;
+    const orderItemsPayload = cartItems.map((item) => ({
+      name: item.menuItem.name,
+      quantity: item.quantity,
+      modifiers: item.modifiers,
+      price:
+        item.menuItem.price +
+        (item.modifiers["Side"]?.[0] && item.modifiers["Side"]?.[0] !== NO_SIDE_VALUE
+          ? sidePriceByName.get(item.modifiers["Side"][0]) ?? 0
+          : 0),
+      registerCode: item.menuItem.register_code ?? undefined,
+      showInKitchen: item.menuItem.show_in_kitchen,
+    }));
+    const kitchenItems = buildKitchenPrintItems(cartItems);
+
     if (!sessionId) {
       const created = await createSession(tableName);
       if (!created.ok || !created.session) {
+        if (isLikelyOfflineError(created.error)) {
+          enqueueOrderSubmission({
+            table: tableName,
+            sessionId: null,
+            isTakeawayOrder,
+            items: orderItemsPayload,
+            takeawayNumber,
+            kitchenItems,
+          });
+          if (kitchenItems.length > 0) {
+            printKitchenTicket({
+              type: "kitchen",
+              table: tableName,
+              createdAt: new Date().toISOString(),
+              items: kitchenItems,
+              takeawayNumber,
+              paperWidthMm: 58,
+            });
+          }
+          notify("Rendelés nyomtatva, de internet nélkül került sorba (szinkronra vár).", "info");
+          setPanelTransition("out");
+          await sleep(panelExitDurationMs);
+          setTable(TAKEAWAY_VALUE);
+          setCartItems([]);
+          setOrderStep(1);
+          setActiveSessionId(null);
+          setPanelTransition("in");
+          await sleep(panelEnterDurationMs);
+          setPanelTransition("idle");
+          setIsSubmitting(false);
+          return;
+        }
         notify(created.error ?? "Nem sikerült munkamenetet nyitni.", "error");
         setIsSubmitting(false);
         return;
@@ -627,27 +675,47 @@ const Cashier = () => {
     const result = await addOrder({
       table: tableName,
       sessionId,
-      items: cartItems.map((item) => ({
-        name: item.menuItem.name,
-        quantity: item.quantity,
-        modifiers: item.modifiers,
-        price:
-          item.menuItem.price +
-          (item.modifiers["Side"]?.[0] && item.modifiers["Side"]?.[0] !== NO_SIDE_VALUE
-            ? sidePriceByName.get(item.modifiers["Side"][0]) ?? 0
-            : 0),
-        registerCode: item.menuItem.register_code ?? undefined,
-        showInKitchen: item.menuItem.show_in_kitchen,
-      })),
+      items: orderItemsPayload,
     });
 
     if (!result.ok) {
+      if (isLikelyOfflineError(result.error)) {
+        enqueueOrderSubmission({
+          table: tableName,
+          sessionId: sessionId ?? null,
+          isTakeawayOrder,
+          items: orderItemsPayload,
+          takeawayNumber,
+          kitchenItems,
+        });
+        if (kitchenItems.length > 0) {
+          printKitchenTicket({
+            type: "kitchen",
+            table: tableName,
+            createdAt: new Date().toISOString(),
+            items: kitchenItems,
+            takeawayNumber,
+            paperWidthMm: 58,
+          });
+        }
+        notify("Rendelés nyomtatva, de internet nélkül került sorba (szinkronra vár).", "info");
+        setPanelTransition("out");
+        await sleep(panelExitDurationMs);
+        setTable(TAKEAWAY_VALUE);
+        setCartItems([]);
+        setOrderStep(1);
+        setActiveSessionId(null);
+        setPanelTransition("in");
+        await sleep(panelEnterDurationMs);
+        setPanelTransition("idle");
+        setIsSubmitting(false);
+        return;
+      }
       notify(result.error ?? "A rendelést most nem lehet elküldeni.", "error");
       setIsSubmitting(false);
       return;
     }
 
-    const kitchenItems = buildKitchenPrintItems(cartItems);
     if (kitchenItems.length > 0) {
       const printResult = printKitchenTicket({
         type: "kitchen",
