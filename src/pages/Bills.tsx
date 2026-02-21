@@ -688,12 +688,12 @@ const Bills = () => {
                           {summaryLines.map((line) => (
                             <div
                               key={`${line.name}-${line.registerCode ?? "none"}`}
-                              className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast"
+                              className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-4 text-2xl text-contrast"
                             >
-                              <p className="font-semibold">
-                                {line.quantity}x {line.name}
-                              </p>
-                              <p className="text-xs text-contrast/60">Kód {line.registerCode ?? "-"}</p>
+                              <div className="flex w-full items-center justify-between gap-3">
+                                <p className="font-semibold">{line.quantity}x {line.name}</p>
+                                <p className="text-xl text-contrast/80">Kód {line.registerCode ?? "-"}</p>
+                              </div>
                             </div>
                           ))}
                         </div>
