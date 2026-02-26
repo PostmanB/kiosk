@@ -64,15 +64,6 @@ const formatCategoryName = (name: string) => {
   return name;
 };
 const fallbackIconName = "ph:fork-knife";
-const COMMON_EXTRAS = [
-  "Hagyma nélkül",
-  "Zöldség nélkül",
-  "Paradicsom nélkül",
-  "Saláta nélkül",
-  "Uborka nélkül",
-  "Sajt nélkül",
-  "Extra szósz",
-];
 
 const normalizeModifiers = (modifiers: Record<string, string[]>) => {
   const sortedEntries = Object.entries(modifiers)
@@ -118,6 +109,7 @@ const formatModifierLines = (modifiers?: Record<string, string[]>) => {
 const buildModifierGroups = (
   item: MenuItem | null,
   sauces: { name: string }[],
+  extras: { name: string }[],
   sideOptions: string[],
   isSideItem: boolean,
   isDrinkItem: boolean
@@ -140,12 +132,13 @@ const buildModifierGroups = (
       options: [NO_SIDE_VALUE, ...sideOptions],
     });
   }
-  if (!isSideItem && !isDrinkItem && COMMON_EXTRAS.length > 0) {
+  const extraOptions = extras.map((extra) => extra.name);
+  if (!isSideItem && !isDrinkItem && extraOptions.length > 0) {
     groups.push({
       id: "Extras",
       label: "Extrák",
       type: "multi",
-      options: COMMON_EXTRAS,
+      options: extraOptions,
     });
   }
   return groups;
@@ -184,6 +177,7 @@ const Cashier = () => {
     categories,
     items,
     sauces,
+    extras,
     error: menuError,
   } = useMenu();
   const { sessions, createSession, closeSession } = useSessions();
@@ -199,6 +193,7 @@ const Cashier = () => {
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [selectedModifiers, setSelectedModifiers] = useState<Record<string, string[]>>({});
+  const [customExtraInput, setCustomExtraInput] = useState("");
   const [selectedQty, setSelectedQty] = useState(1);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [orderStep, setOrderStep] = useState<1 | 2 | 3>(1);
@@ -253,11 +248,12 @@ const Cashier = () => {
       buildModifierGroups(
         selectedItem,
         sauces,
+        extras,
         sideOptions,
         Boolean(selectedItem && sideCategory && selectedItem.category_id === sideCategory.id),
         Boolean(selectedItem && drinksCategory && selectedItem.category_id === drinksCategory.id)
       ),
-    [selectedItem, sauces, sideOptions, sideCategory, drinksCategory]
+    [selectedItem, sauces, extras, sideOptions, sideCategory, drinksCategory]
   );
 
   const itemsForCategory = useMemo(() => {
@@ -415,6 +411,7 @@ const Cashier = () => {
   const resetDetailPanel = () => {
     setSelectedItem(null);
     setSelectedModifiers({});
+    setCustomExtraInput("");
     setSelectedQty(1);
   };
 
@@ -422,6 +419,7 @@ const Cashier = () => {
     const groups = buildModifierGroups(
       item,
       sauces,
+      extras,
       sideOptions,
       Boolean(sideCategory && item.category_id === sideCategory.id),
       Boolean(drinksCategory && item.category_id === drinksCategory.id)
@@ -436,6 +434,7 @@ const Cashier = () => {
     });
     setSelectedItem(item);
     setSelectedModifiers(defaults);
+    setCustomExtraInput("");
     setSelectedQty(1);
   };
 
@@ -489,6 +488,29 @@ const Cashier = () => {
     });
     setFeedback(null);
     resetDetailPanel();
+  };
+
+  const addCustomExtra = () => {
+    const trimmed = customExtraInput.trim();
+    if (!trimmed) return;
+    setSelectedModifiers((prev) => {
+      const existing = prev.Extras ?? [];
+      const exists = existing.some((value) => value.trim().toLowerCase() === trimmed.toLowerCase());
+      if (exists) return prev;
+      return {
+        ...prev,
+        Extras: [...existing, trimmed],
+      };
+    });
+    setCustomExtraInput("");
+  };
+
+  const removeCustomExtra = (value: string) => {
+    setSelectedModifiers((prev) => {
+      const existing = prev.Extras ?? [];
+      const next = existing.filter((entry) => entry !== value);
+      return { ...prev, Extras: next };
+    });
   };
 
   const updateCartQuantity = (id: string, delta: number) => {
@@ -1336,6 +1358,52 @@ const Cashier = () => {
                         );
                       })}
                     </div>
+                    {group.id === "Extras" ? (
+                      <div className="space-y-2">
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <input
+                            value={customExtraInput}
+                            onChange={(event) => setCustomExtraInput(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                addCustomExtra();
+                              }
+                            }}
+                            className="flex-1 rounded-2xl border border-accent-3/60 bg-primary/70 px-3 py-2 text-sm text-contrast outline-none transition focus:border-brand/60"
+                            placeholder="Egyedi extra (egyszeri)"
+                          />
+                          <button
+                            type="button"
+                            onClick={addCustomExtra}
+                            className="rounded-full border border-brand/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-brand transition hover:bg-brand/10"
+                          >
+                            Egyedi extra hozzáadása
+                          </button>
+                        </div>
+                        {(() => {
+                          const predefined = new Set(group.options);
+                          const customSelected = (selectedModifiers[group.id] ?? []).filter(
+                            (value) => !predefined.has(value)
+                          );
+                          if (customSelected.length === 0) return null;
+                          return (
+                            <div className="flex flex-wrap gap-2">
+                              {customSelected.map((value) => (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  onClick={() => removeCustomExtra(value)}
+                                  className="rounded-full border border-brand/50 bg-brand/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-brand transition hover:border-rose-400/70 hover:text-rose-300"
+                                >
+                                  {value} ×
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    ) : null}
                   </div>
                 ))}
               </div>

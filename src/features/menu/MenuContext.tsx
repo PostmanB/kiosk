@@ -16,6 +16,11 @@ export type MenuSide = {
   name: string;
 };
 
+export type MenuExtra = {
+  id: string;
+  name: string;
+};
+
 export type MenuItem = {
   id: string;
   name: string;
@@ -47,6 +52,7 @@ type MenuContextValue = {
   categories: MenuCategory[];
   sauces: MenuSauce[];
   sides: MenuSide[];
+  extras: MenuExtra[];
   items: MenuItem[];
   isLoading: boolean;
   error: string | null;
@@ -56,21 +62,34 @@ type MenuContextValue = {
   addSauce: (name: string) => Promise<{ ok: boolean; error?: string }>;
   deleteSauce: (id: string) => Promise<{ ok: boolean; error?: string }>;
   addSide: (name: string) => Promise<{ ok: boolean; error?: string }>;
+  addExtra: (name: string) => Promise<{ ok: boolean; error?: string }>;
   addItem: (input: AddItemInput) => Promise<{ ok: boolean; error?: string }>;
   updateCategory: (id: string, name: string) => Promise<{ ok: boolean; error?: string }>;
   updateSauce: (id: string, name: string) => Promise<{ ok: boolean; error?: string }>;
   updateSide: (id: string, name: string) => Promise<{ ok: boolean; error?: string }>;
+  updateExtra: (id: string, name: string) => Promise<{ ok: boolean; error?: string }>;
   updateItem: (input: AddItemInput & { id: string }) => Promise<{ ok: boolean; error?: string }>;
   deleteItem: (id: string) => Promise<{ ok: boolean; error?: string }>;
+  deleteExtra: (id: string) => Promise<{ ok: boolean; error?: string }>;
 };
 
 const TABLES = {
   categories: "kiosk_categories",
   sauces: "kiosk_sauces",
   sides: "kiosk_sides",
+  extras: "kiosk_extras",
   items: "kiosk_items",
 };
 const DEFAULT_CATEGORIES = ["Sides", "Drinks"];
+const DEFAULT_EXTRAS = [
+  "Hagyma nélkül",
+  "Zöldség nélkül",
+  "Paradicsom nélkül",
+  "Saláta nélkül",
+  "Uborka nélkül",
+  "Sajt nélkül",
+  "Extra szósz",
+];
 
 const MenuContext = createContext<MenuContextValue | undefined>(undefined);
 
@@ -85,17 +104,20 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
   const [categories, setCategories] = useState<MenuCategory[]>([]);
   const [sauces, setSauces] = useState<MenuSauce[]>([]);
   const [sides, setSides] = useState<MenuSide[]>([]);
+  const [extras, setExtras] = useState<MenuExtra[]>([]);
   const [items, setItems] = useState<MenuItem[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const ensuredDefaultsRef = useRef(false);
+  const ensuredExtrasDefaultsRef = useRef(false);
 
   const refresh = useCallback(async () => {
     setIsLoading(true);
-    const [categoriesRes, saucesRes, sidesRes, itemsRes] = await Promise.all([
+    const [categoriesRes, saucesRes, sidesRes, extrasRes, itemsRes] = await Promise.all([
       supabase.from(TABLES.categories).select("*").order("name"),
       supabase.from(TABLES.sauces).select("*").order("name"),
       supabase.from(TABLES.sides).select("*").order("name"),
+      supabase.from(TABLES.extras).select("*").order("name"),
       supabase.from(TABLES.items).select("*").order("name"),
     ]);
 
@@ -111,9 +133,24 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
       return;
     }
 
+    const extrasTableMissing =
+      extrasRes.error &&
+      (extrasRes.error.code === "42P01" ||
+        extrasRes.error.message.toLowerCase().includes(TABLES.extras));
+    if (extrasRes.error && !extrasTableMissing) {
+      setError(extrasRes.error.message || "Az extrák betöltése sikertelen.");
+      setIsLoading(false);
+      return;
+    }
+
     setCategories(categoriesRes.data ?? []);
     setSauces(saucesRes.data ?? []);
     setSides(sidesRes.data ?? []);
+    setExtras(
+      extrasTableMissing
+        ? DEFAULT_EXTRAS.map((name, index) => ({ id: `default-extra-${index}`, name }))
+        : extrasRes.data ?? []
+    );
     setItems((itemsRes.data ?? []).map(normalizeItem));
     setError(null);
     setIsLoading(false);
@@ -127,6 +164,7 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
       .on("postgres_changes", { event: "*", schema: "public", table: TABLES.categories }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: TABLES.sauces }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: TABLES.sides }, refresh)
+      .on("postgres_changes", { event: "*", schema: "public", table: TABLES.extras }, refresh)
       .on("postgres_changes", { event: "*", schema: "public", table: TABLES.items }, refresh)
       .subscribe();
 
@@ -159,6 +197,25 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
         }
       });
   }, [categories, error, isLoading, refresh]);
+
+  useEffect(() => {
+    if (isLoading || error || ensuredExtrasDefaultsRef.current) {
+      return;
+    }
+    if (extras.length > 0) {
+      ensuredExtrasDefaultsRef.current = true;
+      return;
+    }
+    ensuredExtrasDefaultsRef.current = true;
+    supabase
+      .from(TABLES.extras)
+      .insert(DEFAULT_EXTRAS.map((name) => ({ name })))
+      .then(({ error: insertError }) => {
+        if (!insertError) {
+          refresh();
+        }
+      });
+  }, [error, extras.length, isLoading, refresh]);
 
   const addCategory = useCallback(
     async (name: string) => {
@@ -235,6 +292,24 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
         return { ok: false, error: "A köret neve kötelező." };
       }
       const { error: insertError } = await supabase.from(TABLES.sides).insert({ name: trimmed });
+      if (insertError) {
+        setError(insertError.message);
+        return { ok: false, error: insertError.message };
+      }
+      setError(null);
+      await refresh();
+      return { ok: true };
+    },
+    [refresh]
+  );
+
+  const addExtra = useCallback(
+    async (name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) {
+        return { ok: false, error: "Az extra neve kötelező." };
+      }
+      const { error: insertError } = await supabase.from(TABLES.extras).insert({ name: trimmed });
       if (insertError) {
         setError(insertError.message);
         return { ok: false, error: insertError.message };
@@ -347,6 +422,27 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
     [refresh]
   );
 
+  const updateExtra = useCallback(
+    async (id: string, name: string) => {
+      const trimmed = name.trim();
+      if (!trimmed) {
+        return { ok: false, error: "Az extra neve kötelező." };
+      }
+      const { error: updateError } = await supabase
+        .from(TABLES.extras)
+        .update({ name: trimmed })
+        .eq("id", id);
+      if (updateError) {
+        setError(updateError.message);
+        return { ok: false, error: updateError.message };
+      }
+      setError(null);
+      await refresh();
+      return { ok: true };
+    },
+    [refresh]
+  );
+
   const updateItem = useCallback(
     async (input: AddItemInput & { id: string }) => {
       const trimmedName = input.name.trim();
@@ -402,11 +498,27 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
     [refresh]
   );
 
+  const deleteExtra = useCallback(
+    async (id: string) => {
+      const { error: deleteError } = await supabase.from(TABLES.extras).delete().eq("id", id);
+      if (deleteError) {
+        setError(deleteError.message);
+        return { ok: false, error: deleteError.message };
+      }
+      setExtras((prev) => prev.filter((extra) => extra.id !== id));
+      setError(null);
+      await refresh();
+      return { ok: true };
+    },
+    [refresh]
+  );
+
   const value = useMemo(
     () => ({
       categories,
       sauces,
       sides,
+      extras,
       items,
       isLoading,
       error,
@@ -416,17 +528,21 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
       addSauce,
       deleteSauce,
       addSide,
+      addExtra,
       addItem,
       updateCategory,
       updateSauce,
       updateSide,
+      updateExtra,
       updateItem,
       deleteItem,
+      deleteExtra,
     }),
     [
       categories,
       sauces,
       sides,
+      extras,
       items,
       isLoading,
       error,
@@ -436,12 +552,15 @@ export const MenuProvider = ({ children }: { children: React.ReactNode }) => {
       addSauce,
       deleteSauce,
       addSide,
+      addExtra,
       addItem,
       updateCategory,
       updateSauce,
       updateSide,
+      updateExtra,
       updateItem,
       deleteItem,
+      deleteExtra,
     ]
   );
 
