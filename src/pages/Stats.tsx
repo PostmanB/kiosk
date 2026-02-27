@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useOrders } from "../features/orders/OrdersContext";
 import StatsGate from "../features/pin/StatsGate";
 
@@ -29,13 +29,32 @@ const addWeeks = (value: Date, weeks: number) => {
 const formatShortDate = (value: Date) =>
   value.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
+const toDateInputValue = (date: Date) => {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+};
+
+const toDayRange = (dateInput: string) => {
+  const [year, month, day] = dateInput.split("-").map((part) => Number(part));
+  const start = new Date(year, (month || 1) - 1, day || 1, 0, 0, 0, 0);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+  return { start, end };
+};
+
 const Stats = () => {
   const { orders, isLoading, error } = useOrders();
+  const [selectedDate, setSelectedDate] = useState(() => toDateInputValue(new Date()));
+  const todayDate = useMemo(() => toDateInputValue(new Date()), []);
 
   const {
     allTime,
     thisWeek,
     lastWeek,
+    selectedDay,
+    selectedDayLabel,
     weekLabel,
     weeklySales,
     weeklyRangeLabel,
@@ -48,6 +67,7 @@ const Stats = () => {
     const weekEnd = endOfWeek(now);
     const lastWeekStart = addWeeks(weekStart, -1);
     const lastWeekEnd = weekStart;
+    const { start: selectedDayStart, end: selectedDayEnd } = toDayRange(selectedDate);
 
     const summarize = (subset: typeof orders) => {
       const itemsSold = subset.reduce(
@@ -75,6 +95,10 @@ const Stats = () => {
     const lastWeekOrders = orders.filter((order) => {
       const createdAt = new Date(order.createdAt);
       return createdAt >= lastWeekStart && createdAt < lastWeekEnd;
+    });
+    const selectedDayOrders = orders.filter((order) => {
+      const createdAt = new Date(order.createdAt);
+      return createdAt >= selectedDayStart && createdAt < selectedDayEnd;
     });
 
     const buildItemStats = (subset: typeof orders) => {
@@ -111,31 +135,33 @@ const Stats = () => {
     const allTimeItems = buildItemStats(orders);
     const thisWeekItems = buildItemStats(thisWeekOrders);
     const lastWeekItems = buildItemStats(lastWeekOrders);
+    const selectedDayItems = buildItemStats(selectedDayOrders);
     const itemStatsList = Array.from(allTimeItems.entries())
       .map(([name, total]) => ({
         name,
         allTime: total,
         thisWeek: thisWeekItems.get(name) ?? 0,
         lastWeek: lastWeekItems.get(name) ?? 0,
+        selectedDay: selectedDayItems.get(name) ?? 0,
       }))
       .sort((a, b) => b.allTime - a.allTime);
 
     const allTimeSauces = buildSauceStats(orders);
     const thisWeekSauces = buildSauceStats(thisWeekOrders);
     const lastWeekSauces = buildSauceStats(lastWeekOrders);
+    const selectedDaySauces = buildSauceStats(selectedDayOrders);
     const sauceStatsList = Array.from(allTimeSauces.entries())
       .map(([name, total]) => ({
         name,
         allTime: total,
         thisWeek: thisWeekSauces.get(name) ?? 0,
         lastWeek: lastWeekSauces.get(name) ?? 0,
+        selectedDay: selectedDaySauces.get(name) ?? 0,
       }))
       .sort((a, b) => b.allTime - a.allTime);
 
     const currentWeekStart = startOfWeek(now);
-    const weeks = Array.from({ length: 52 }, (_, index) =>
-      addWeeks(currentWeekStart, index - 51)
-    );
+    const weeks = Array.from({ length: 52 }, (_, index) => addWeeks(currentWeekStart, index - 51));
     const weekKey = (date: Date) => startOfWeek(date).toISOString().slice(0, 10);
     const weekIndex = new Map(weeks.map((week, index) => [weekKey(week), index]));
     const weeklyTotals = new Array(52).fill(0);
@@ -157,16 +183,16 @@ const Stats = () => {
       allTime: summarize(orders),
       thisWeek: summarize(thisWeekOrders),
       lastWeek: summarize(lastWeekOrders),
-      weekLabel: `${weekStart.toLocaleDateString()} - ${new Date(
-        weekEnd.getTime() - 1
-      ).toLocaleDateString()}`,
+      selectedDay: summarize(selectedDayOrders),
+      selectedDayLabel: selectedDayStart.toLocaleDateString(),
+      weekLabel: `${weekStart.toLocaleDateString()} - ${new Date(weekEnd.getTime() - 1).toLocaleDateString()}`,
       weeklySales: weeklyTotals,
       weeklyRangeLabel: rangeLabel,
       weeklyDates: weeks,
       itemStats: itemStatsList,
       sauceStats: sauceStatsList,
     };
-  }, [orders]);
+  }, [orders, selectedDate]);
 
   const salesDelta = thisWeek.totalSales - lastWeek.totalSales;
   const itemsDelta = thisWeek.itemsSold - lastWeek.itemsSold;
@@ -194,20 +220,13 @@ const Stats = () => {
 
     const lastIndex = Math.max(0, weeklySales.length - 1);
     const points = weeklySales.map((value, index) => {
-      const x =
-        paddingX +
-        (index / Math.max(1, weeklySales.length - 1)) * (width - paddingX * 2);
-      const y =
-        paddingY +
-        (1 - value / maxValue) * (height - paddingY * 2);
+      const x = paddingX + (index / Math.max(1, weeklySales.length - 1)) * (width - paddingX * 2);
+      const y = paddingY + (1 - value / maxValue) * (height - paddingY * 2);
       const isLast = index === lastIndex;
       return {
         x,
         y,
-        value,
-        valueLabel: isLast
-          ? formatCurrency(value)
-          : Math.round(value).toLocaleString(),
+        valueLabel: isLast ? formatCurrency(value) : Math.round(value).toLocaleString(),
         dateLabel: weeklyDates[index] ? formatShortDate(weeklyDates[index]) : "",
         showLabel: value > 0 || isLast,
       };
@@ -215,14 +234,14 @@ const Stats = () => {
 
     const polyline = points.map((point) => `${point.x},${point.y}`).join(" ");
 
-    return { width, height, paddingX, paddingY, labelYOffset, valueOffset, maxValue, points, polyline };
+    return { width, height, paddingX, paddingY, labelYOffset, valueOffset, points, polyline };
   }, [weeklySales, weeklyDates]);
 
   return (
     <StatsGate>
       <section className="space-y-8">
         <div className="rounded-2xl border border-accent-3/60 bg-accent-2/70 px-4 py-3 text-sm text-contrast/70 shadow-sm">
-          {isLoading ? "Statisztika szinkronizálása..." : "Statisztika áttekintés"}
+          {isLoading ? "Statisztika szinkronizalasa..." : "Statisztika attekintes"}
         </div>
 
         {error ? (
@@ -231,20 +250,18 @@ const Stats = () => {
           </div>
         ) : null}
 
-        <div className="grid gap-6 lg:grid-cols-2">
+        <div className="grid gap-6 xl:grid-cols-3">
           <div className="rounded-3xl border border-accent-3/60 bg-accent-1/80 p-6 shadow-lg shadow-accent-4/20">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                  Összesen
-                </p>
-                <h2 className="text-xl font-semibold text-contrast">Összesített teljesítmény</h2>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">Osszesen</p>
+                <h2 className="text-xl font-semibold text-contrast">Osszesitett teljesitmeny</h2>
               </div>
             </div>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
-                  Összes értékesítés
+                  Osszes ertekesites
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-contrast">
                   {formatCurrency(allTime.totalSales)}
@@ -252,7 +269,7 @@ const Stats = () => {
               </div>
               <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
-                  Eladott tételek
+                  Eladott tetelek
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-contrast">
                   {allTime.itemsSold.toLocaleString()}
@@ -264,16 +281,14 @@ const Stats = () => {
           <div className="rounded-3xl border border-accent-3/60 bg-accent-1/80 p-6 shadow-lg shadow-accent-4/20">
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                  Ezen a héten
-                </p>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">Ezen a heten</p>
                 <h2 className="text-xl font-semibold text-contrast">{weekLabel}</h2>
               </div>
             </div>
             <div className="mt-6 grid gap-4 sm:grid-cols-2">
               <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
-                  Összes értékesítés
+                  Osszes ertekesites
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-contrast">
                   {formatCurrency(thisWeek.totalSales)}
@@ -283,14 +298,14 @@ const Stats = () => {
                 >
                   {salesDeltaMeta.arrow}{" "}
                   {salesDelta === 0
-                    ? "Nincs változás"
+                    ? "Nincs valtozas"
                     : `${salesDelta > 0 ? "+" : "-"}${formatCurrency(Math.abs(salesDelta))}`}{" "}
-                  az előző héthez képest
+                  az elozo hethez kepest
                 </p>
               </div>
               <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-4">
                 <p className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
-                  Eladott tételek
+                  Eladott tetelek
                 </p>
                 <p className="mt-2 text-2xl font-semibold text-contrast">
                   {thisWeek.itemsSold.toLocaleString()}
@@ -300,9 +315,48 @@ const Stats = () => {
                 >
                   {itemsDeltaMeta.arrow}{" "}
                   {itemsDelta === 0
-                    ? "Nincs változás"
+                    ? "Nincs valtozas"
                     : `${itemsDelta > 0 ? "+" : "-"}${Math.abs(itemsDelta).toLocaleString()}`}{" "}
-                  az előző héthez képest
+                  az elozo hethez kepest
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <div className="rounded-3xl border border-accent-3/60 bg-accent-1/80 p-6 shadow-lg shadow-accent-4/20">
+            <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
+              <div>
+                <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
+                  Kivalasztott nap
+                </p>
+                <h2 className="text-xl font-semibold text-contrast">{selectedDayLabel}</h2>
+              </div>
+              <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-contrast/60">
+                Nap
+                <input
+                  type="date"
+                  value={selectedDate}
+                  max={todayDate}
+                  onChange={(event) => setSelectedDate(event.target.value || todayDate)}
+                  className="rounded-xl border border-accent-3/70 bg-primary/80 px-3 py-2 text-sm font-medium text-contrast"
+                />
+              </label>
+            </div>
+            <div className="mt-6 grid gap-4 sm:grid-cols-2">
+              <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
+                  Osszes ertekesites
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-contrast">
+                  {formatCurrency(selectedDay.totalSales)}
+                </p>
+              </div>
+              <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
+                  Eladott tetelek
+                </p>
+                <p className="mt-2 text-2xl font-semibold text-contrast">
+                  {selectedDay.itemsSold.toLocaleString()}
                 </p>
               </div>
             </div>
@@ -313,9 +367,9 @@ const Stats = () => {
           <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                Heti értékesítés
+                Heti ertekesites
               </p>
-              <h2 className="text-xl font-semibold text-contrast">Utolsó 52 hét</h2>
+              <h2 className="text-xl font-semibold text-contrast">Utolso 52 het</h2>
             </div>
             <div className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
               {weeklyRangeLabel}
@@ -326,7 +380,7 @@ const Stats = () => {
               viewBox={`0 0 ${chart.width} ${chart.height}`}
               className="h-72 w-full"
               role="img"
-              aria-label="Heti értékesítés grafikon"
+              aria-label="Heti ertekesites grafikon"
             >
               <line
                 x1={chart.paddingX}
@@ -345,13 +399,7 @@ const Stats = () => {
               />
               {chart.points.map((point, index) => (
                 <g key={`point-${index}`}>
-                  <circle
-                    cx={point.x}
-                    cy={point.y}
-                    r="3"
-                    fill="currentColor"
-                    opacity={0.85}
-                  />
+                  <circle cx={point.x} cy={point.y} r="3" fill="currentColor" opacity={0.85} />
                   {point.showLabel ? (
                     <>
                       <text
@@ -370,9 +418,7 @@ const Stats = () => {
                         fontSize="9"
                         fill="currentColor"
                         opacity="0.55"
-                        transform={`rotate(-45 ${point.x} ${
-                          chart.height - chart.paddingY + chart.labelYOffset
-                        })`}
+                        transform={`rotate(-45 ${point.x} ${chart.height - chart.paddingY + chart.labelYOffset})`}
                       >
                         {point.dateLabel}
                       </text>
@@ -387,57 +433,50 @@ const Stats = () => {
         <div className="rounded-3xl border border-accent-3/60 bg-accent-1/80 p-6 shadow-lg shadow-accent-4/20">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                Eladott tételek
-              </p>
-              <h2 className="text-xl font-semibold text-contrast">Összesen vs ezen a héten</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">Eladott tetelek</p>
+              <h2 className="text-xl font-semibold text-contrast">Osszesen, heti, napi nezet</h2>
             </div>
             <div className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
-              {weekLabel}
+              {selectedDayLabel}
             </div>
           </div>
           <div className="mt-4 overflow-hidden rounded-2xl border border-accent-3/60 bg-primary/70">
-            <div className="grid grid-cols-[1fr_120px_120px] gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-contrast/60">
-              <span>Tétel</span>
-              <span className="text-right">Összesen</span>
-              <span className="text-right">Ezen a héten</span>
+            <div className="grid grid-cols-[1fr_110px_110px_110px] gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-contrast/60">
+              <span>Tetel</span>
+              <span className="text-right">Osszesen</span>
+              <span className="text-right">Het</span>
+              <span className="text-right">Nap</span>
             </div>
             <div className="max-h-[360px] overflow-y-auto">
               {itemStats.length === 0 ? (
-                <div className="px-4 py-6 text-sm text-contrast/60">Még nincs eladott tétel.</div>
+                <div className="px-4 py-6 text-sm text-contrast/60">Meg nincs eladott tetel.</div>
               ) : (
-                itemStats.map((item) => (
-                  <div
-                    key={item.name}
-                    className="grid grid-cols-[1fr_120px_120px] gap-2 border-t border-accent-3/60 px-4 py-3 text-sm text-contrast"
-                  >
-                    <span className="font-semibold">{item.name}</span>
-                    <span className="text-right">{item.allTime.toLocaleString()}</span>
-                    <span className="text-right">
-                      {(() => {
-                        const delta = item.thisWeek - item.lastWeek;
-                        const meta =
-                          delta > 0
-                            ? { arrow: "▲", className: "text-emerald-500" }
-                            : delta < 0
-                              ? { arrow: "▼", className: "text-rose-400" }
-                              : { arrow: "—", className: "text-contrast/60" };
-                        const deltaLabel =
-                          delta === 0
-                            ? "0"
-                            : `${delta > 0 ? "+" : ""}${delta.toLocaleString()}`;
-                        return (
-                          <span className={`font-semibold ${meta.className}`}>
-                            {meta.arrow} {item.thisWeek.toLocaleString()}{" "}
-                            <span className="text-[11px] font-semibold opacity-80">
-                              ({deltaLabel})
-                            </span>
-                          </span>
-                        );
-                      })()}
-                    </span>
-                  </div>
-                ))
+                itemStats.map((item) => {
+                  const delta = item.thisWeek - item.lastWeek;
+                  const meta =
+                    delta > 0
+                      ? { arrow: "▲", className: "text-emerald-500" }
+                      : delta < 0
+                        ? { arrow: "▼", className: "text-rose-400" }
+                        : { arrow: "—", className: "text-contrast/60" };
+                  const deltaLabel =
+                    delta === 0 ? "0" : `${delta > 0 ? "+" : ""}${delta.toLocaleString()}`;
+
+                  return (
+                    <div
+                      key={item.name}
+                      className="grid grid-cols-[1fr_110px_110px_110px] gap-2 border-t border-accent-3/60 px-4 py-3 text-sm text-contrast"
+                    >
+                      <span className="font-semibold">{item.name}</span>
+                      <span className="text-right">{item.allTime.toLocaleString()}</span>
+                      <span className={`text-right font-semibold ${meta.className}`}>
+                        {meta.arrow} {item.thisWeek.toLocaleString()}{" "}
+                        <span className="text-[11px] opacity-80">({deltaLabel})</span>
+                      </span>
+                      <span className="text-right font-semibold">{item.selectedDay.toLocaleString()}</span>
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
@@ -446,57 +485,50 @@ const Stats = () => {
         <div className="rounded-3xl border border-accent-3/60 bg-accent-1/80 p-6 shadow-lg shadow-accent-4/20">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                Felhasznált szószok
-              </p>
-              <h2 className="text-xl font-semibold text-contrast">Összesen vs ezen a héten</h2>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">Felhasznalt szoszok</p>
+              <h2 className="text-xl font-semibold text-contrast">Osszesen, heti, napi nezet</h2>
             </div>
             <div className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
-              {weekLabel}
+              {selectedDayLabel}
             </div>
           </div>
           <div className="mt-4 overflow-hidden rounded-2xl border border-accent-3/60 bg-primary/70">
-            <div className="grid grid-cols-[1fr_120px_120px] gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-contrast/60">
-              <span>Szósz</span>
-              <span className="text-right">Összesen</span>
-              <span className="text-right">Ezen a héten</span>
+            <div className="grid grid-cols-[1fr_110px_110px_110px] gap-2 px-4 py-3 text-xs font-semibold uppercase tracking-wide text-contrast/60">
+              <span>Szosz</span>
+              <span className="text-right">Osszesen</span>
+              <span className="text-right">Het</span>
+              <span className="text-right">Nap</span>
             </div>
             <div className="max-h-[360px] overflow-y-auto">
               {sauceStats.length === 0 ? (
-                <div className="px-4 py-6 text-sm text-contrast/60">Még nincs felhasznált szósz.</div>
+                <div className="px-4 py-6 text-sm text-contrast/60">Meg nincs felhasznalt szosz.</div>
               ) : (
-                sauceStats.map((sauce) => (
-                  <div
-                    key={sauce.name}
-                    className="grid grid-cols-[1fr_120px_120px] gap-2 border-t border-accent-3/60 px-4 py-3 text-sm text-contrast"
-                  >
-                    <span className="font-semibold">{sauce.name}</span>
-                    <span className="text-right">{sauce.allTime.toLocaleString()}</span>
-                    <span className="text-right">
-                      {(() => {
-                        const delta = sauce.thisWeek - sauce.lastWeek;
-                        const meta =
-                          delta > 0
-                            ? { arrow: "▲", className: "text-emerald-500" }
-                            : delta < 0
-                              ? { arrow: "▼", className: "text-rose-400" }
-                              : { arrow: "—", className: "text-contrast/60" };
-                        const deltaLabel =
-                          delta === 0
-                            ? "0"
-                            : `${delta > 0 ? "+" : ""}${delta.toLocaleString()}`;
-                        return (
-                          <span className={`font-semibold ${meta.className}`}>
-                            {meta.arrow} {sauce.thisWeek.toLocaleString()}{" "}
-                            <span className="text-[11px] font-semibold opacity-80">
-                              ({deltaLabel})
-                            </span>
-                          </span>
-                        );
-                      })()}
-                    </span>
-                  </div>
-                ))
+                sauceStats.map((sauce) => {
+                  const delta = sauce.thisWeek - sauce.lastWeek;
+                  const meta =
+                    delta > 0
+                      ? { arrow: "▲", className: "text-emerald-500" }
+                      : delta < 0
+                        ? { arrow: "▼", className: "text-rose-400" }
+                        : { arrow: "—", className: "text-contrast/60" };
+                  const deltaLabel =
+                    delta === 0 ? "0" : `${delta > 0 ? "+" : ""}${delta.toLocaleString()}`;
+
+                  return (
+                    <div
+                      key={sauce.name}
+                      className="grid grid-cols-[1fr_110px_110px_110px] gap-2 border-t border-accent-3/60 px-4 py-3 text-sm text-contrast"
+                    >
+                      <span className="font-semibold">{sauce.name}</span>
+                      <span className="text-right">{sauce.allTime.toLocaleString()}</span>
+                      <span className={`text-right font-semibold ${meta.className}`}>
+                        {meta.arrow} {sauce.thisWeek.toLocaleString()}{" "}
+                        <span className="text-[11px] opacity-80">({deltaLabel})</span>
+                      </span>
+                      <span className="text-right font-semibold">{sauce.selectedDay.toLocaleString()}</span>
+                    </div>
+                  );
+                })
               )}
             </div>
           </div>
@@ -507,3 +539,4 @@ const Stats = () => {
 };
 
 export default Stats;
+
