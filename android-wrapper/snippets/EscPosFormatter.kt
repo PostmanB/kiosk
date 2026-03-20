@@ -21,6 +21,7 @@ object EscPosFormatter {
   private val boldOn = byteArrayOf(0x1B, 0x45, 0x01)
   private val boldOff = byteArrayOf(0x1B, 0x45, 0x00)
   private val textSizeNormal = byteArrayOf(0x1D, 0x21, 0x00)
+  private val textSizeTall = byteArrayOf(0x1D, 0x21, 0x01)
   private val textSizeDouble = byteArrayOf(0x1D, 0x21, 0x11)
   private val cut = byteArrayOf(0x1D, 0x56, 0x01)
   // ESC t n -> select character table. 18 is commonly CP852 on ESC/POS clones.
@@ -34,7 +35,7 @@ object EscPosFormatter {
 
     out.write(init)
     out.write(codeTableCp852)
-    out.write(textSizeNormal)
+    out.write(textSizeTall)
     out.write(alignCenter)
     out.write(boldOn)
     writeLine(out, "KITCHEN")
