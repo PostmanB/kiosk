@@ -1,5 +1,5 @@
-import { useMemo, useState } from "react";
-import { useOrders } from "../features/orders/OrdersContext";
+import { useMemo } from "react";
+import useOrderHistory from "../features/orders/useOrderHistory";
 import StatsGate from "../features/pin/StatsGate";
 
 const formatCurrency = (value: number) => `EUR ${value.toFixed(2)}`;
@@ -45,9 +45,7 @@ const toDayRange = (dateInput: string) => {
 };
 
 const Stats = () => {
-  const { orders, isLoading, error } = useOrders();
-  const [selectedDate, setSelectedDate] = useState(() => toDateInputValue(new Date()));
-  const todayDate = useMemo(() => toDateInputValue(new Date()), []);
+  const { orders, isLoading, error } = useOrderHistory();
 
   const {
     allTime,
