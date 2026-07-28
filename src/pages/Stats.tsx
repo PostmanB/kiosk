@@ -1,5 +1,5 @@
 import { useMemo } from "react";
-import { useOrders } from "../features/orders/OrdersContext";
+import useOrderHistory from "../features/orders/useOrderHistory";
 import StatsGate from "../features/pin/StatsGate";
 
 const formatCurrency = (value: number) => `EUR ${value.toFixed(2)}`;
@@ -30,7 +30,7 @@ const formatShortDate = (value: Date) =>
   value.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 
 const Stats = () => {
-  const { orders, isLoading, error } = useOrders();
+  const { orders, isLoading, error } = useOrderHistory();
 
   const {
     allTime,
