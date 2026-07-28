@@ -27,6 +27,7 @@ const addWeeks = (value: Date, weeks: number) => {
 };
 
 type ChartView = "daily" | "weekly" | "monthly" | "yearly";
+type ChartMetric = "sales" | "orders";
 
 const chartViewOptions: Array<{ value: ChartView; label: string }> = [
   { value: "daily", label: "Napi" },
@@ -34,6 +35,17 @@ const chartViewOptions: Array<{ value: ChartView; label: string }> = [
   { value: "monthly", label: "Havi" },
   { value: "yearly", label: "Eves" },
 ];
+
+const chartMetricOptions: Array<{ value: ChartMetric; label: string }> = [
+  { value: "sales", label: "EUR" },
+  { value: "orders", label: "Rendelesek" },
+];
+
+const formatChartValue = (value: number, metric: ChartMetric, averaged = false) => {
+  if (metric === "sales") return formatCurrency(value);
+  const formatted = averaged ? value.toFixed(2) : Math.round(value).toLocaleString();
+  return `${formatted} rendeles`;
+};
 
 const toDateInputValue = (date: Date) => {
   const year = date.getFullYear();
@@ -50,11 +62,112 @@ const toDayRange = (dateInput: string) => {
   return { start, end };
 };
 
+const toWeekInputValue = (dateInput: string) => {
+  const { start } = toDayRange(dateInput);
+  const target = new Date(Date.UTC(start.getFullYear(), start.getMonth(), start.getDate()));
+  const dayNumber = target.getUTCDay() || 7;
+  target.setUTCDate(target.getUTCDate() + 4 - dayNumber);
+  const weekYear = target.getUTCFullYear();
+  const yearStart = new Date(Date.UTC(weekYear, 0, 1));
+  const week = Math.ceil(((target.getTime() - yearStart.getTime()) / 86400000 + 1) / 7);
+  return `${weekYear}-W${String(week).padStart(2, "0")}`;
+};
+
+const fromWeekInputValue = (weekInput: string) => {
+  const [yearPart, weekPart] = weekInput.split("-W");
+  const year = Number(yearPart);
+  const week = Number(weekPart);
+  if (!Number.isFinite(year) || !Number.isFinite(week)) return "";
+  const firstWeekMonday = startOfWeek(new Date(year, 0, 4));
+  firstWeekMonday.setDate(firstWeekMonday.getDate() + (week - 1) * 7);
+  return toDateInputValue(firstWeekMonday);
+};
+
+type ChartPeriodPickerProps = {
+  maxDate: string;
+  onChange: (value: string) => void;
+  value: string;
+  view: ChartView;
+};
+
+const ChartPeriodPicker = ({ maxDate, onChange, value, view }: ChartPeriodPickerProps) => {
+  const anchorDate = toDayRange(value).start;
+  const inputClassName =
+    "rounded-xl border border-accent-3/70 bg-primary/80 px-3 py-2 text-sm font-medium text-contrast";
+
+  if (view === "daily") {
+    return (
+      <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-contrast/60">
+        Nap
+        <input
+          type="date"
+          value={value}
+          max={maxDate}
+          onChange={(event) => onChange(event.target.value || maxDate)}
+          className={inputClassName}
+        />
+      </label>
+    );
+  }
+
+  if (view === "weekly") {
+    return (
+      <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-contrast/60">
+        Het
+        <input
+          type="week"
+          value={toWeekInputValue(value)}
+          max={toWeekInputValue(maxDate)}
+          onChange={(event) => onChange(fromWeekInputValue(event.target.value) || maxDate)}
+          className={inputClassName}
+        />
+      </label>
+    );
+  }
+
+  if (view === "monthly") {
+    return (
+      <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-contrast/60">
+        Honap
+        <input
+          type="month"
+          value={value.slice(0, 7)}
+          max={maxDate.slice(0, 7)}
+          onChange={(event) => onChange(event.target.value ? `${event.target.value}-01` : maxDate)}
+          className={inputClassName}
+        />
+      </label>
+    );
+  }
+
+  return (
+    <label className="flex flex-col gap-1 text-xs font-semibold uppercase tracking-wide text-contrast/60">
+      Ev
+      <input
+        type="number"
+        min="2000"
+        max={toDayRange(maxDate).start.getFullYear()}
+        value={anchorDate.getFullYear()}
+        onChange={(event) => {
+          const year = Number(event.target.value);
+          if (Number.isFinite(year)) onChange(`${year}-01-01`);
+        }}
+        className={`${inputClassName} w-28`}
+      />
+    </label>
+  );
+};
+
 const Stats = () => {
   const { orders, isLoading, error } = useOrderHistory();
   const [selectedDate, setSelectedDate] = useState(() => toDateInputValue(new Date()));
   const [chartView, setChartView] = useState<ChartView>("daily");
+  const [chartMetric, setChartMetric] = useState<ChartMetric>("sales");
+  const [hourlyChartView, setHourlyChartView] = useState<ChartView>("daily");
+  const [hourlyChartMetric, setHourlyChartMetric] = useState<ChartMetric>("sales");
   const todayDate = useMemo(() => toDateInputValue(new Date()), []);
+  const [chartDate, setChartDate] = useState(todayDate);
+  const [hourlyChartDate, setHourlyChartDate] = useState(todayDate);
 
   const {
     allTime,
@@ -192,10 +305,10 @@ const Stats = () => {
         : { arrow: "—", className: "text-contrast/60" };
 
   const salesChart = useMemo(() => {
-    const { start: selectedDayStart } = toDayRange(selectedDate);
+    const { start: selectedDayStart } = toDayRange(chartDate);
     let rangeStart = new Date(selectedDayStart);
     let rangeEnd = new Date(selectedDayStart);
-    let title = "Orankenti ertekesites";
+    let title = chartMetric === "sales" ? "Orankenti ertekesites" : "Orankenti rendelesek";
     let rangeLabel = selectedDayStart.toLocaleDateString();
     let labelEvery = 3;
     let buckets: Array<{ label: string; value: number }> = [];
@@ -203,15 +316,15 @@ const Stats = () => {
 
     if (chartView === "daily") {
       rangeEnd.setDate(rangeEnd.getDate() + 1);
-      buckets = Array.from({ length: 24 }, (_, hour) => ({
-        label: `${String(hour).padStart(2, "0")}:00`,
+      buckets = Array.from({ length: 17 }, (_, index) => ({
+        label: `${String(index + 7).padStart(2, "0")}:00`,
         value: 0,
       }));
-      bucketIndex = (date) => date.getHours();
+      bucketIndex = (date) => date.getHours() - 7;
     } else if (chartView === "weekly") {
       rangeStart = startOfWeek(selectedDayStart);
       rangeEnd = endOfWeek(selectedDayStart);
-      title = "Napi ertekesites";
+      title = chartMetric === "sales" ? "Napi ertekesites" : "Napi rendelesek";
       rangeLabel = `${rangeStart.toLocaleDateString()} - ${new Date(rangeEnd.getTime() - 1).toLocaleDateString()}`;
       labelEvery = 1;
       buckets = Array.from({ length: 7 }, (_, index) => {
@@ -231,7 +344,7 @@ const Stats = () => {
         selectedDayStart.getMonth() + 1,
         0
       ).getDate();
-      title = "Napi ertekesites";
+      title = chartMetric === "sales" ? "Napi ertekesites" : "Napi rendelesek";
       rangeLabel = selectedDayStart.toLocaleDateString(undefined, { month: "long", year: "numeric" });
       labelEvery = 5;
       buckets = Array.from({ length: daysInMonth }, (_, index) => ({
@@ -242,7 +355,7 @@ const Stats = () => {
     } else {
       rangeStart = new Date(selectedDayStart.getFullYear(), 0, 1);
       rangeEnd = new Date(selectedDayStart.getFullYear() + 1, 0, 1);
-      title = "Havi ertekesites";
+      title = chartMetric === "sales" ? "Havi ertekesites" : "Havi rendelesek";
       rangeLabel = String(selectedDayStart.getFullYear());
       labelEvery = 1;
       buckets = Array.from({ length: 12 }, (_, month) => ({
@@ -259,15 +372,18 @@ const Stats = () => {
       if (createdAt < rangeStart || createdAt >= rangeEnd) return;
       const index = bucketIndex(createdAt);
       if (!buckets[index]) return;
-      const orderTotal = order.items.reduce((sum, item) => {
-        if (typeof item.price !== "number" || Number.isNaN(item.price)) return sum;
-        return sum + item.price * Math.max(0, item.quantity);
-      }, 0);
-      buckets[index].value += orderTotal;
+      if (chartMetric === "orders") {
+        buckets[index].value += 1;
+      } else {
+        buckets[index].value += order.items.reduce((sum, item) => {
+          if (typeof item.price !== "number" || Number.isNaN(item.price)) return sum;
+          return sum + item.price * Math.max(0, item.quantity);
+        }, 0);
+      }
     });
 
-    return { buckets, labelEvery, rangeLabel, title };
-  }, [chartView, orders, selectedDate]);
+    return { buckets, labelEvery, metric: chartMetric, rangeLabel, title };
+  }, [chartDate, chartMetric, chartView, orders]);
 
   const chart = useMemo(() => {
     const width = 1000;
@@ -289,7 +405,7 @@ const Stats = () => {
         x,
         y,
         value,
-        valueLabel: formatCurrency(value),
+        valueLabel: formatChartValue(value, salesChart.metric),
         dateLabel: bucket.label,
         showValueLabel: value > 0 && (salesChart.buckets.length <= 24 || showDateLabel),
         showDateLabel,
@@ -300,6 +416,91 @@ const Stats = () => {
 
     return { width, height, paddingX, paddingY, labelYOffset, valueOffset, points, polyline };
   }, [salesChart]);
+
+  const hourlyAverageSales = useMemo(() => {
+    const { start: selectedDayStart, end: selectedDayEnd } = toDayRange(hourlyChartDate);
+    let rangeStart = selectedDayStart;
+    let rangeEnd = selectedDayEnd;
+    let rangeLabel = selectedDayStart.toLocaleDateString();
+
+    if (hourlyChartView === "weekly") {
+      rangeStart = startOfWeek(selectedDayStart);
+      rangeEnd = endOfWeek(selectedDayStart);
+      rangeLabel = `${rangeStart.toLocaleDateString()} - ${new Date(rangeEnd.getTime() - 1).toLocaleDateString()}`;
+    } else if (hourlyChartView === "monthly") {
+      rangeStart = new Date(selectedDayStart.getFullYear(), selectedDayStart.getMonth(), 1);
+      rangeEnd = new Date(selectedDayStart.getFullYear(), selectedDayStart.getMonth() + 1, 1);
+      rangeLabel = selectedDayStart.toLocaleDateString(undefined, {
+        month: "long",
+        year: "numeric",
+      });
+    } else if (hourlyChartView === "yearly") {
+      rangeStart = new Date(selectedDayStart.getFullYear(), 0, 1);
+      rangeEnd = new Date(selectedDayStart.getFullYear() + 1, 0, 1);
+      rangeLabel = String(selectedDayStart.getFullYear());
+    }
+
+    const hourlyTotals = new Array(17).fill(0);
+    const activeDays = new Set<string>();
+
+    orders.forEach((order) => {
+      const createdAt = new Date(order.createdAt);
+      if (createdAt < rangeStart || createdAt >= rangeEnd) return;
+      activeDays.add(toDateInputValue(createdAt));
+      const hourIndex = createdAt.getHours() - 7;
+      if (hourIndex < 0 || hourIndex >= hourlyTotals.length) return;
+      if (hourlyChartMetric === "orders") {
+        hourlyTotals[hourIndex] += 1;
+      } else {
+        hourlyTotals[hourIndex] += order.items.reduce((sum, item) => {
+          if (typeof item.price !== "number" || Number.isNaN(item.price)) return sum;
+          return sum + item.price * Math.max(0, item.quantity);
+        }, 0);
+      }
+    });
+
+    const averagingDays = hourlyChartView === "daily" ? 1 : Math.max(1, activeDays.size);
+    const buckets = hourlyTotals.map((total, index) => ({
+      label: `${String(index + 7).padStart(2, "0")}:00`,
+      value: total / averagingDays,
+    }));
+
+    return {
+      averagingDays,
+      buckets,
+      metric: hourlyChartMetric,
+      rangeLabel,
+      subtitle:
+        hourlyChartView === "daily"
+          ? "Kivalasztott nap"
+          : `${averagingDays.toLocaleString()} aktiv nap atlaga`,
+    };
+  }, [hourlyChartDate, hourlyChartMetric, hourlyChartView, orders]);
+
+  const hourlyBarChart = useMemo(() => {
+    const width = 1000;
+    const height = 320;
+    const paddingX = 42;
+    const paddingTop = 42;
+    const paddingBottom = 48;
+    const baseline = height - paddingBottom;
+    const chartHeight = baseline - paddingTop;
+    const slotWidth = (width - paddingX * 2) / hourlyAverageSales.buckets.length;
+    const barWidth = slotWidth * 0.62;
+    const maxValue = Math.max(1, ...hourlyAverageSales.buckets.map((bucket) => bucket.value));
+    const bars = hourlyAverageSales.buckets.map((bucket, index) => {
+      const barHeight = (bucket.value / maxValue) * chartHeight;
+      return {
+        ...bucket,
+        barHeight,
+        labelX: paddingX + slotWidth * index + slotWidth / 2,
+        x: paddingX + slotWidth * index + (slotWidth - barWidth) / 2,
+        y: baseline - barHeight,
+      };
+    });
+
+    return { bars, barWidth, baseline, height, paddingX, width };
+  }, [hourlyAverageSales]);
 
   return (
     <StatsGate>
@@ -438,26 +639,55 @@ const Stats = () => {
                 {salesChart.rangeLabel}
               </p>
             </div>
-            <div
-              className="flex flex-wrap gap-2"
-              role="group"
-              aria-label="Diagram idoszak"
-            >
-              {chartViewOptions.map((option) => (
-                <button
-                  key={option.value}
-                  type="button"
-                  aria-pressed={chartView === option.value}
-                  onClick={() => setChartView(option.value)}
-                  className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
-                    chartView === option.value
-                      ? "border-brand bg-brand text-white shadow-md shadow-brand/30"
-                      : "border-accent-3/70 bg-primary/70 text-contrast/70 hover:border-brand/50 hover:text-brand"
-                  }`}
-                >
-                  {option.label}
-                </button>
-              ))}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <ChartPeriodPicker
+                view={chartView}
+                value={chartDate}
+                maxDate={todayDate}
+                onChange={setChartDate}
+              />
+              <div
+                className="flex flex-wrap gap-2"
+                role="group"
+                aria-label="Diagram idoszak"
+              >
+                {chartViewOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={chartView === option.value}
+                    onClick={() => setChartView(option.value)}
+                    className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                      chartView === option.value
+                        ? "border-brand bg-brand text-white shadow-md shadow-brand/30"
+                        : "border-accent-3/70 bg-primary/70 text-contrast/70 hover:border-brand/50 hover:text-brand"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <div
+                className="flex flex-wrap gap-2"
+                role="group"
+                aria-label="Diagram mertekegyseg"
+              >
+                {chartMetricOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={chartMetric === option.value}
+                    onClick={() => setChartMetric(option.value)}
+                    className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                      chartMetric === option.value
+                        ? "border-brand bg-brand text-white shadow-md shadow-brand/30"
+                        : "border-accent-3/70 bg-primary/70 text-contrast/70 hover:border-brand/50 hover:text-brand"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
             </div>
           </div>
           <div className="mt-4 rounded-2xl border border-accent-3/60 bg-primary/70 p-4">
@@ -513,6 +743,139 @@ const Stats = () => {
                   ) : null}
                 </g>
               ))}
+            </svg>
+          </div>
+        </div>
+
+        <div className="rounded-3xl border border-accent-3/60 bg-accent-1/80 p-6 shadow-lg shadow-accent-4/20">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+            <div>
+              <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
+                Orankenti atlag
+              </p>
+              <h2 className="text-xl font-semibold text-contrast">
+                {hourlyAverageSales.metric === "sales"
+                  ? "Atlagos orankenti ertekesites"
+                  : "Atlagos orankenti rendelesek"}
+              </h2>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-contrast/60">
+                {hourlyAverageSales.rangeLabel} · {hourlyAverageSales.subtitle}
+              </p>
+            </div>
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-end">
+              <ChartPeriodPicker
+                view={hourlyChartView}
+                value={hourlyChartDate}
+                maxDate={todayDate}
+                onChange={setHourlyChartDate}
+              />
+              <div
+                className="flex flex-wrap gap-2"
+                role="group"
+                aria-label="Orankenti atlag idoszak"
+              >
+                {chartViewOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={hourlyChartView === option.value}
+                    onClick={() => setHourlyChartView(option.value)}
+                    className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                      hourlyChartView === option.value
+                        ? "border-brand bg-brand text-white shadow-md shadow-brand/30"
+                        : "border-accent-3/70 bg-primary/70 text-contrast/70 hover:border-brand/50 hover:text-brand"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+              <div
+                className="flex flex-wrap gap-2"
+                role="group"
+                aria-label="Orankenti atlag mertekegyseg"
+              >
+                {chartMetricOptions.map((option) => (
+                  <button
+                    key={option.value}
+                    type="button"
+                    aria-pressed={hourlyChartMetric === option.value}
+                    onClick={() => setHourlyChartMetric(option.value)}
+                    className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                      hourlyChartMetric === option.value
+                        ? "border-brand bg-brand text-white shadow-md shadow-brand/30"
+                        : "border-accent-3/70 bg-primary/70 text-contrast/70 hover:border-brand/50 hover:text-brand"
+                    }`}
+                  >
+                    {option.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="mt-4 overflow-x-auto rounded-2xl border border-accent-3/60 bg-primary/70 p-4">
+            <svg
+              viewBox={`0 0 ${hourlyBarChart.width} ${hourlyBarChart.height}`}
+              className="h-80 min-w-[760px] w-full"
+              role="img"
+              aria-label={`Atlagos orankenti ${
+                hourlyAverageSales.metric === "sales" ? "ertekesites" : "rendelesek"
+              } oszlopdiagram`}
+            >
+              <line
+                x1={hourlyBarChart.paddingX}
+                y1={hourlyBarChart.baseline}
+                x2={hourlyBarChart.width - hourlyBarChart.paddingX}
+                y2={hourlyBarChart.baseline}
+                stroke="currentColor"
+                strokeOpacity="0.18"
+              />
+              <g className="text-brand">
+                {hourlyBarChart.bars.map((bar) => {
+                  const renderedHeight = Math.max(1, bar.barHeight);
+                  const renderedY = hourlyBarChart.baseline - renderedHeight;
+                  return (
+                    <g key={bar.label}>
+                      <rect
+                        x={bar.x}
+                        y={renderedY}
+                        width={hourlyBarChart.barWidth}
+                        height={renderedHeight}
+                        rx="6"
+                        fill="currentColor"
+                        opacity={bar.value > 0 ? 0.78 : 0.18}
+                      >
+                        <title>{`${bar.label}: ${formatChartValue(
+                          bar.value,
+                          hourlyAverageSales.metric,
+                          true
+                        )}`}</title>
+                      </rect>
+                      {bar.value > 0 ? (
+                        <text
+                          x={bar.labelX}
+                          y={Math.max(18, renderedY - 8)}
+                          textAnchor="middle"
+                          fontSize="9"
+                          fill="currentColor"
+                        >
+                          {bar.value.toFixed(2)}
+                        </text>
+                      ) : null}
+                      <text
+                        x={bar.labelX}
+                        y={hourlyBarChart.baseline + 22}
+                        textAnchor="middle"
+                        fontSize="10"
+                        fill="currentColor"
+                        opacity="0.65"
+                      >
+                        {bar.label}
+                      </text>
+                    </g>
+                  );
+                })}
+              </g>
             </svg>
           </div>
         </div>
