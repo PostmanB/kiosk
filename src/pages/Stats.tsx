@@ -1,4 +1,4 @@
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import useOrderHistory from "../features/orders/useOrderHistory";
 import StatsGate from "../features/pin/StatsGate";
 
@@ -46,6 +46,8 @@ const toDayRange = (dateInput: string) => {
 
 const Stats = () => {
   const { orders, isLoading, error } = useOrderHistory();
+  const [selectedDate, setSelectedDate] = useState(() => toDateInputValue(new Date()));
+  const todayDate = useMemo(() => toDateInputValue(new Date()), []);
 
   const {
     allTime,
