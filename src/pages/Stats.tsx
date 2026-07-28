@@ -26,8 +26,14 @@ const addWeeks = (value: Date, weeks: number) => {
   return next;
 };
 
-const formatShortDate = (value: Date) =>
-  value.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+type ChartView = "daily" | "weekly" | "monthly" | "yearly";
+
+const chartViewOptions: Array<{ value: ChartView; label: string }> = [
+  { value: "daily", label: "Napi" },
+  { value: "weekly", label: "Heti" },
+  { value: "monthly", label: "Havi" },
+  { value: "yearly", label: "Eves" },
+];
 
 const toDateInputValue = (date: Date) => {
   const year = date.getFullYear();
@@ -47,6 +53,7 @@ const toDayRange = (dateInput: string) => {
 const Stats = () => {
   const { orders, isLoading, error } = useOrderHistory();
   const [selectedDate, setSelectedDate] = useState(() => toDateInputValue(new Date()));
+  const [chartView, setChartView] = useState<ChartView>("daily");
   const todayDate = useMemo(() => toDateInputValue(new Date()), []);
 
   const {
@@ -56,9 +63,6 @@ const Stats = () => {
     selectedDay,
     selectedDayLabel,
     weekLabel,
-    weeklySales,
-    weeklyRangeLabel,
-    weeklyDates,
     itemStats,
     sauceStats,
   } = useMemo(() => {
@@ -160,25 +164,6 @@ const Stats = () => {
       }))
       .sort((a, b) => b.allTime - a.allTime);
 
-    const currentWeekStart = startOfWeek(now);
-    const weeks = Array.from({ length: 52 }, (_, index) => addWeeks(currentWeekStart, index - 51));
-    const weekKey = (date: Date) => startOfWeek(date).toISOString().slice(0, 10);
-    const weekIndex = new Map(weeks.map((week, index) => [weekKey(week), index]));
-    const weeklyTotals = new Array(52).fill(0);
-
-    orders.forEach((order) => {
-      const key = weekKey(new Date(order.createdAt));
-      const index = weekIndex.get(key);
-      if (index === undefined) return;
-      const orderTotal = order.items.reduce((sum, item) => {
-        if (typeof item.price !== "number" || Number.isNaN(item.price)) return sum;
-        return sum + item.price * Math.max(0, item.quantity);
-      }, 0);
-      weeklyTotals[index] += orderTotal;
-    });
-
-    const rangeLabel = `${formatShortDate(weeks[0])} - ${formatShortDate(addWeeks(weeks[51], 1))}`;
-
     return {
       allTime: summarize(orders),
       thisWeek: summarize(thisWeekOrders),
@@ -186,9 +171,6 @@ const Stats = () => {
       selectedDay: summarize(selectedDayOrders),
       selectedDayLabel: selectedDayStart.toLocaleDateString(),
       weekLabel: `${weekStart.toLocaleDateString()} - ${new Date(weekEnd.getTime() - 1).toLocaleDateString()}`,
-      weeklySales: weeklyTotals,
-      weeklyRangeLabel: rangeLabel,
-      weeklyDates: weeks,
       itemStats: itemStatsList,
       sauceStats: sauceStatsList,
     };
@@ -209,6 +191,84 @@ const Stats = () => {
         ? { arrow: "▼", className: "text-rose-400" }
         : { arrow: "—", className: "text-contrast/60" };
 
+  const salesChart = useMemo(() => {
+    const { start: selectedDayStart } = toDayRange(selectedDate);
+    let rangeStart = new Date(selectedDayStart);
+    let rangeEnd = new Date(selectedDayStart);
+    let title = "Orankenti ertekesites";
+    let rangeLabel = selectedDayStart.toLocaleDateString();
+    let labelEvery = 3;
+    let buckets: Array<{ label: string; value: number }> = [];
+    let bucketIndex: (date: Date) => number = () => -1;
+
+    if (chartView === "daily") {
+      rangeEnd.setDate(rangeEnd.getDate() + 1);
+      buckets = Array.from({ length: 24 }, (_, hour) => ({
+        label: `${String(hour).padStart(2, "0")}:00`,
+        value: 0,
+      }));
+      bucketIndex = (date) => date.getHours();
+    } else if (chartView === "weekly") {
+      rangeStart = startOfWeek(selectedDayStart);
+      rangeEnd = endOfWeek(selectedDayStart);
+      title = "Napi ertekesites";
+      rangeLabel = `${rangeStart.toLocaleDateString()} - ${new Date(rangeEnd.getTime() - 1).toLocaleDateString()}`;
+      labelEvery = 1;
+      buckets = Array.from({ length: 7 }, (_, index) => {
+        const date = new Date(rangeStart);
+        date.setDate(date.getDate() + index);
+        return {
+          label: date.toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" }),
+          value: 0,
+        };
+      });
+      bucketIndex = (date) => (date.getDay() + 6) % 7;
+    } else if (chartView === "monthly") {
+      rangeStart = new Date(selectedDayStart.getFullYear(), selectedDayStart.getMonth(), 1);
+      rangeEnd = new Date(selectedDayStart.getFullYear(), selectedDayStart.getMonth() + 1, 1);
+      const daysInMonth = new Date(
+        selectedDayStart.getFullYear(),
+        selectedDayStart.getMonth() + 1,
+        0
+      ).getDate();
+      title = "Napi ertekesites";
+      rangeLabel = selectedDayStart.toLocaleDateString(undefined, { month: "long", year: "numeric" });
+      labelEvery = 5;
+      buckets = Array.from({ length: daysInMonth }, (_, index) => ({
+        label: String(index + 1),
+        value: 0,
+      }));
+      bucketIndex = (date) => date.getDate() - 1;
+    } else {
+      rangeStart = new Date(selectedDayStart.getFullYear(), 0, 1);
+      rangeEnd = new Date(selectedDayStart.getFullYear() + 1, 0, 1);
+      title = "Havi ertekesites";
+      rangeLabel = String(selectedDayStart.getFullYear());
+      labelEvery = 1;
+      buckets = Array.from({ length: 12 }, (_, month) => ({
+        label: new Date(selectedDayStart.getFullYear(), month, 1).toLocaleDateString(undefined, {
+          month: "short",
+        }),
+        value: 0,
+      }));
+      bucketIndex = (date) => date.getMonth();
+    }
+
+    orders.forEach((order) => {
+      const createdAt = new Date(order.createdAt);
+      if (createdAt < rangeStart || createdAt >= rangeEnd) return;
+      const index = bucketIndex(createdAt);
+      if (!buckets[index]) return;
+      const orderTotal = order.items.reduce((sum, item) => {
+        if (typeof item.price !== "number" || Number.isNaN(item.price)) return sum;
+        return sum + item.price * Math.max(0, item.quantity);
+      }, 0);
+      buckets[index].value += orderTotal;
+    });
+
+    return { buckets, labelEvery, rangeLabel, title };
+  }, [chartView, orders, selectedDate]);
+
   const chart = useMemo(() => {
     const width = 1000;
     const height = 300;
@@ -216,26 +276,30 @@ const Stats = () => {
     const paddingY = 30;
     const labelYOffset = 20;
     const valueOffset = 10;
-    const maxValue = Math.max(1, ...weeklySales);
+    const maxValue = Math.max(1, ...salesChart.buckets.map((bucket) => bucket.value));
 
-    const lastIndex = Math.max(0, weeklySales.length - 1);
-    const points = weeklySales.map((value, index) => {
-      const x = paddingX + (index / Math.max(1, weeklySales.length - 1)) * (width - paddingX * 2);
+    const lastIndex = Math.max(0, salesChart.buckets.length - 1);
+    const points = salesChart.buckets.map((bucket, index) => {
+      const x = paddingX + (index / Math.max(1, lastIndex)) * (width - paddingX * 2);
+      const value = bucket.value;
       const y = paddingY + (1 - value / maxValue) * (height - paddingY * 2);
-      const isLast = index === lastIndex;
+      const showDateLabel =
+        index === 0 || index === lastIndex || index % salesChart.labelEvery === 0;
       return {
         x,
         y,
-        valueLabel: isLast ? formatCurrency(value) : Math.round(value).toLocaleString(),
-        dateLabel: weeklyDates[index] ? formatShortDate(weeklyDates[index]) : "",
-        showLabel: value > 0 || isLast,
+        value,
+        valueLabel: formatCurrency(value),
+        dateLabel: bucket.label,
+        showValueLabel: value > 0 && (salesChart.buckets.length <= 24 || showDateLabel),
+        showDateLabel,
       };
     });
 
     const polyline = points.map((point) => `${point.x},${point.y}`).join(" ");
 
     return { width, height, paddingX, paddingY, labelYOffset, valueOffset, points, polyline };
-  }, [weeklySales, weeklyDates]);
+  }, [salesChart]);
 
   return (
     <StatsGate>
@@ -364,15 +428,36 @@ const Stats = () => {
         </div>
 
         <div className="rounded-3xl border border-accent-3/60 bg-accent-1/80 p-6 shadow-lg shadow-accent-4/20">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between">
+          <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
             <div>
               <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
-                Heti ertekesites
+                Ertekesitesi bontas
               </p>
-              <h2 className="text-xl font-semibold text-contrast">Utolso 52 het</h2>
+              <h2 className="text-xl font-semibold text-contrast">{salesChart.title}</h2>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-wide text-contrast/60">
+                {salesChart.rangeLabel}
+              </p>
             </div>
-            <div className="text-xs font-semibold uppercase tracking-wide text-contrast/60">
-              {weeklyRangeLabel}
+            <div
+              className="flex flex-wrap gap-2"
+              role="group"
+              aria-label="Diagram idoszak"
+            >
+              {chartViewOptions.map((option) => (
+                <button
+                  key={option.value}
+                  type="button"
+                  aria-pressed={chartView === option.value}
+                  onClick={() => setChartView(option.value)}
+                  className={`rounded-full border px-4 py-2 text-xs font-semibold uppercase tracking-wide transition ${
+                    chartView === option.value
+                      ? "border-brand bg-brand text-white shadow-md shadow-brand/30"
+                      : "border-accent-3/70 bg-primary/70 text-contrast/70 hover:border-brand/50 hover:text-brand"
+                  }`}
+                >
+                  {option.label}
+                </button>
+              ))}
             </div>
           </div>
           <div className="mt-4 rounded-2xl border border-accent-3/60 bg-primary/70 p-4">
@@ -380,7 +465,7 @@ const Stats = () => {
               viewBox={`0 0 ${chart.width} ${chart.height}`}
               className="h-72 w-full"
               role="img"
-              aria-label="Heti ertekesites grafikon"
+              aria-label={`${salesChart.title} grafikon`}
             >
               <line
                 x1={chart.paddingX}
@@ -399,30 +484,32 @@ const Stats = () => {
               />
               {chart.points.map((point, index) => (
                 <g key={`point-${index}`}>
-                  <circle cx={point.x} cy={point.y} r="3" fill="currentColor" opacity={0.85} />
-                  {point.showLabel ? (
-                    <>
-                      <text
-                        x={point.x + 8}
-                        y={Math.max(chart.paddingY, point.y - chart.valueOffset)}
-                        fontSize="10"
-                        fill="currentColor"
-                        opacity="0.7"
-                      >
-                        {point.valueLabel}
-                      </text>
-                      <text
-                        x={point.x}
-                        y={chart.height - chart.paddingY + chart.labelYOffset}
-                        textAnchor="middle"
-                        fontSize="9"
-                        fill="currentColor"
-                        opacity="0.55"
-                        transform={`rotate(-45 ${point.x} ${chart.height - chart.paddingY + chart.labelYOffset})`}
-                      >
-                        {point.dateLabel}
-                      </text>
-                    </>
+                  <circle cx={point.x} cy={point.y} r="3" fill="currentColor" opacity={0.85}>
+                    <title>{`${point.dateLabel}: ${point.valueLabel}`}</title>
+                  </circle>
+                  {point.showValueLabel ? (
+                    <text
+                      x={point.x + 8}
+                      y={Math.max(chart.paddingY, point.y - chart.valueOffset)}
+                      fontSize="10"
+                      fill="currentColor"
+                      opacity="0.7"
+                    >
+                      {point.valueLabel}
+                    </text>
+                  ) : null}
+                  {point.showDateLabel ? (
+                    <text
+                      x={point.x}
+                      y={chart.height - chart.paddingY + chart.labelYOffset}
+                      textAnchor="middle"
+                      fontSize="9"
+                      fill="currentColor"
+                      opacity="0.55"
+                      transform={`rotate(-45 ${point.x} ${chart.height - chart.paddingY + chart.labelYOffset})`}
+                    >
+                      {point.dateLabel}
+                    </text>
                   ) : null}
                 </g>
               ))}
