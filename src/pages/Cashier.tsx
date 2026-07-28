@@ -1,4 +1,4 @@
-﻿import { useEffect, useMemo, useState } from "react";
+﻿import { useEffect, useMemo, useRef, useState } from "react";
 import { createPortal } from "react-dom";
 import { Icon } from "@iconify/react";
 import { useOrders } from "../features/orders/OrdersContext";
@@ -8,6 +8,7 @@ import type { MenuItem } from "../features/menu/MenuContext";
 import { toast } from "react-toastify";
 import useLockBodyScroll from "../hooks/useLockBodyScroll";
 import { printKitchenTicket } from "../lib/printing";
+import { isLikelyOfflineError, useOfflineSync } from "../features/offline/OfflineSyncContext";
 
 type MenuModifierGroup = {
   id: string;
@@ -63,15 +64,6 @@ const formatCategoryName = (name: string) => {
   return name;
 };
 const fallbackIconName = "ph:fork-knife";
-const COMMON_EXTRAS = [
-  "Hagyma nélkül",
-  "Zöldség nélkül",
-  "Paradicsom nélkül",
-  "Saláta nélkül",
-  "Uborka nélkül",
-  "Sajt nélkül",
-  "Extra szósz",
-];
 
 const normalizeModifiers = (modifiers: Record<string, string[]>) => {
   const sortedEntries = Object.entries(modifiers)
@@ -117,6 +109,7 @@ const formatModifierLines = (modifiers?: Record<string, string[]>) => {
 const buildModifierGroups = (
   item: MenuItem | null,
   sauces: { name: string }[],
+  extras: { name: string }[],
   sideOptions: string[],
   isSideItem: boolean,
   isDrinkItem: boolean
@@ -139,12 +132,13 @@ const buildModifierGroups = (
       options: [NO_SIDE_VALUE, ...sideOptions],
     });
   }
-  if (!isSideItem && !isDrinkItem && COMMON_EXTRAS.length > 0) {
+  const extraOptions = extras.map((extra) => extra.name);
+  if (!isSideItem && !isDrinkItem && extraOptions.length > 0) {
     groups.push({
       id: "Extras",
       label: "Extrák",
       type: "multi",
-      options: COMMON_EXTRAS,
+      options: extraOptions,
     });
   }
   return groups;
@@ -183,24 +177,37 @@ const Cashier = () => {
     categories,
     items,
     sauces,
+    extras,
     error: menuError,
   } = useMenu();
   const { sessions, createSession, closeSession } = useSessions();
+  const { enqueueOrderSubmission } = useOfflineSync();
   const takeawayLabel = TAKEAWAY_LABEL;
   const portalTarget = typeof document !== "undefined" ? document.body : null;
 
   const [activeCategoryId, setActiveCategoryId] = useState<string | null>(null);
   const [table, setTable] = useState(TAKEAWAY_VALUE);
   const [activeSessionId, setActiveSessionId] = useState<string | null>(null);
+  const [isAddToBillModalOpen, setIsAddToBillModalOpen] = useState(false);
   const [billTable, setBillTable] = useState<string | null>(null);
   const [cartItems, setCartItems] = useState<CartItem[]>([]);
   const [selectedItem, setSelectedItem] = useState<MenuItem | null>(null);
   const [selectedModifiers, setSelectedModifiers] = useState<Record<string, string[]>>({});
+  const [customExtraInput, setCustomExtraInput] = useState("");
   const [selectedQty, setSelectedQty] = useState(1);
   const [feedback, setFeedback] = useState<string | null>(null);
   const [orderStep, setOrderStep] = useState<1 | 2 | 3>(1);
   const [panelTransition, setPanelTransition] = useState<"idle" | "out" | "in">("idle");
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const cartSectionRef = useRef<HTMLDivElement | null>(null);
+  const [swipeOffsets, setSwipeOffsets] = useState<Record<string, number>>({});
+  const swipeRef = useRef<{
+    itemId: string;
+    pointerId: number;
+    startX: number;
+    startY: number;
+    active: boolean;
+  } | null>(null);
   const resolvedTable = table.trim() || TAKEAWAY_VALUE;
   const billInputValue = isTakeaway(table) ? "" : table;
 
@@ -241,17 +248,22 @@ const Cashier = () => {
       buildModifierGroups(
         selectedItem,
         sauces,
+        extras,
         sideOptions,
         Boolean(selectedItem && sideCategory && selectedItem.category_id === sideCategory.id),
         Boolean(selectedItem && drinksCategory && selectedItem.category_id === drinksCategory.id)
       ),
-    [selectedItem, sauces, sideOptions, sideCategory, drinksCategory]
+    [selectedItem, sauces, extras, sideOptions, sideCategory, drinksCategory]
   );
 
   const itemsForCategory = useMemo(() => {
     if (!activeCategoryId) return [];
     return items.filter((item) => item.category_id === activeCategoryId);
   }, [items, activeCategoryId]);
+  const activeCategoryName = useMemo(
+    () => categories.find((category) => category.id === activeCategoryId)?.name ?? null,
+    [categories, activeCategoryId]
+  );
 
   const topSellers = useMemo(() => {
     const counts = new Map<string, number>();
@@ -319,6 +331,24 @@ const Cashier = () => {
     [sessions]
   );
 
+  const openBillOptions = useMemo(() => {
+    return openSessions
+      .map((session) => {
+        const sessionOrders = orders.filter((order) => order.sessionId === session.id);
+        const itemCount = sessionOrders.reduce(
+          (sum, order) => sum + order.items.reduce((inner, item) => inner + item.quantity, 0),
+          0
+        );
+        return {
+          table: session.table,
+          sessionId: session.id,
+          ordersCount: sessionOrders.length,
+          itemCount,
+        };
+      })
+      .sort((a, b) => a.table.localeCompare(b.table));
+  }, [openSessions, orders]);
+
   const tableGroups = useMemo(() => {
     return openSessions
       .map((session) => {
@@ -342,7 +372,7 @@ const Cashier = () => {
   }, [tableGroups]);
 
   const billGroup = billTable ? tableGroupMap.get(billTable) : null;
-  useLockBodyScroll(Boolean(selectedItem) || Boolean(billGroup));
+  useLockBodyScroll(Boolean(selectedItem) || Boolean(billGroup) || isAddToBillModalOpen);
   const billSummaryLines = useMemo(() => {
     if (!billGroup) return [];
     return buildReviewLines(
@@ -381,6 +411,7 @@ const Cashier = () => {
   const resetDetailPanel = () => {
     setSelectedItem(null);
     setSelectedModifiers({});
+    setCustomExtraInput("");
     setSelectedQty(1);
   };
 
@@ -388,6 +419,7 @@ const Cashier = () => {
     const groups = buildModifierGroups(
       item,
       sauces,
+      extras,
       sideOptions,
       Boolean(sideCategory && item.category_id === sideCategory.id),
       Boolean(drinksCategory && item.category_id === drinksCategory.id)
@@ -402,6 +434,7 @@ const Cashier = () => {
     });
     setSelectedItem(item);
     setSelectedModifiers(defaults);
+    setCustomExtraInput("");
     setSelectedQty(1);
   };
 
@@ -457,6 +490,29 @@ const Cashier = () => {
     resetDetailPanel();
   };
 
+  const addCustomExtra = () => {
+    const trimmed = customExtraInput.trim();
+    if (!trimmed) return;
+    setSelectedModifiers((prev) => {
+      const existing = prev.Extras ?? [];
+      const exists = existing.some((value) => value.trim().toLowerCase() === trimmed.toLowerCase());
+      if (exists) return prev;
+      return {
+        ...prev,
+        Extras: [...existing, trimmed],
+      };
+    });
+    setCustomExtraInput("");
+  };
+
+  const removeCustomExtra = (value: string) => {
+    setSelectedModifiers((prev) => {
+      const existing = prev.Extras ?? [];
+      const next = existing.filter((entry) => entry !== value);
+      return { ...prev, Extras: next };
+    });
+  };
+
   const updateCartQuantity = (id: string, delta: number) => {
     setCartItems((prev) =>
       prev
@@ -469,6 +525,87 @@ const Cashier = () => {
 
   const removeCartItem = (id: string) => {
     setCartItems((prev) => prev.filter((item) => item.id !== id));
+    setSwipeOffsets((prev) => {
+      if (!(id in prev)) return prev;
+      const next = { ...prev };
+      delete next[id];
+      return next;
+    });
+  };
+
+  const scrollPageTop = () => {
+    if (typeof window === "undefined") return;
+    window.scrollTo({ top: 0, behavior: "smooth" });
+  };
+
+  const scrollPageBottom = () => {
+    if (typeof window === "undefined") return;
+    const height = Math.max(
+      document.body.scrollHeight,
+      document.documentElement.scrollHeight
+    );
+    window.scrollTo({ top: height, behavior: "smooth" });
+  };
+
+  const handleGoToBillAndSend = () => {
+    if (cartItems.length === 0 && existingItems.length === 0) {
+      notify("Adj hozzá legalább egy tételt a folytatáshoz.", "error");
+      return;
+    }
+    setFeedback(null);
+    setOrderStep(2);
+    requestAnimationFrame(scrollPageTop);
+  };
+
+  const handleBackToItems = () => {
+    setOrderStep(1);
+    requestAnimationFrame(scrollPageBottom);
+  };
+
+  const handleCartSwipeStart = (itemId: string, event: React.PointerEvent<HTMLDivElement>) => {
+    if (event.pointerType !== "touch") return;
+    swipeRef.current = {
+      itemId,
+      pointerId: event.pointerId,
+      startX: event.clientX,
+      startY: event.clientY,
+      active: true,
+    };
+  };
+
+  const handleCartSwipeMove = (event: React.PointerEvent<HTMLDivElement>) => {
+    const current = swipeRef.current;
+    if (!current) return;
+    if (event.pointerId !== current.pointerId) return;
+    if (!current.active) return;
+
+    const deltaX = event.clientX - current.startX;
+    const deltaY = event.clientY - current.startY;
+    if (Math.abs(deltaY) > Math.abs(deltaX) && Math.abs(deltaY) > 8) {
+      current.active = false;
+      setSwipeOffsets((prev) => ({ ...prev, [current.itemId]: 0 }));
+      return;
+    }
+
+    if (deltaX < 0) {
+      const clamped = Math.max(-128, deltaX);
+      setSwipeOffsets((prev) => ({ ...prev, [current.itemId]: clamped }));
+      event.preventDefault();
+    }
+  };
+
+  const handleCartSwipeEnd = (event: React.PointerEvent<HTMLDivElement>) => {
+    const current = swipeRef.current;
+    if (!current) return;
+    if (event.pointerId !== current.pointerId) return;
+
+    const offset = swipeOffsets[current.itemId] ?? 0;
+    if (offset <= -96) {
+      removeCartItem(current.itemId);
+    } else {
+      setSwipeOffsets((prev) => ({ ...prev, [current.itemId]: 0 }));
+    }
+    swipeRef.current = null;
   };
 
   const panelExitDurationMs = 300;
@@ -500,9 +637,55 @@ const Cashier = () => {
     const isTakeawayOrder = isTakeaway(tableName);
     const takeawayNumber = isTakeawayOrder ? nextTakeawayNumber : undefined;
     let sessionId = activeSessionId;
+    const orderItemsPayload = cartItems.map((item) => ({
+      name: item.menuItem.name,
+      quantity: item.quantity,
+      modifiers: item.modifiers,
+      price:
+        item.menuItem.price +
+        (item.modifiers["Side"]?.[0] && item.modifiers["Side"]?.[0] !== NO_SIDE_VALUE
+          ? sidePriceByName.get(item.modifiers["Side"][0]) ?? 0
+          : 0),
+      registerCode: item.menuItem.register_code ?? undefined,
+      showInKitchen: item.menuItem.show_in_kitchen,
+    }));
+    const kitchenItems = buildKitchenPrintItems(cartItems);
+
     if (!sessionId) {
       const created = await createSession(tableName);
       if (!created.ok || !created.session) {
+        if (isLikelyOfflineError(created.error)) {
+          enqueueOrderSubmission({
+            table: tableName,
+            sessionId: null,
+            isTakeawayOrder,
+            items: orderItemsPayload,
+            takeawayNumber,
+            kitchenItems,
+          });
+          if (kitchenItems.length > 0) {
+            printKitchenTicket({
+              type: "kitchen",
+              table: tableName,
+              createdAt: new Date().toISOString(),
+              items: kitchenItems,
+              takeawayNumber,
+              paperWidthMm: 58,
+            });
+          }
+          notify("Rendelés nyomtatva, de internet nélkül került sorba (szinkronra vár).", "info");
+          setPanelTransition("out");
+          await sleep(panelExitDurationMs);
+          setTable(TAKEAWAY_VALUE);
+          setCartItems([]);
+          setOrderStep(1);
+          setActiveSessionId(null);
+          setPanelTransition("in");
+          await sleep(panelEnterDurationMs);
+          setPanelTransition("idle");
+          setIsSubmitting(false);
+          return;
+        }
         notify(created.error ?? "Nem sikerült munkamenetet nyitni.", "error");
         setIsSubmitting(false);
         return;
@@ -514,27 +697,47 @@ const Cashier = () => {
     const result = await addOrder({
       table: tableName,
       sessionId,
-      items: cartItems.map((item) => ({
-        name: item.menuItem.name,
-        quantity: item.quantity,
-        modifiers: item.modifiers,
-        price:
-          item.menuItem.price +
-          (item.modifiers["Side"]?.[0] && item.modifiers["Side"]?.[0] !== NO_SIDE_VALUE
-            ? sidePriceByName.get(item.modifiers["Side"][0]) ?? 0
-            : 0),
-        registerCode: item.menuItem.register_code ?? undefined,
-        showInKitchen: item.menuItem.show_in_kitchen,
-      })),
+      items: orderItemsPayload,
     });
 
     if (!result.ok) {
+      if (isLikelyOfflineError(result.error)) {
+        enqueueOrderSubmission({
+          table: tableName,
+          sessionId: sessionId ?? null,
+          isTakeawayOrder,
+          items: orderItemsPayload,
+          takeawayNumber,
+          kitchenItems,
+        });
+        if (kitchenItems.length > 0) {
+          printKitchenTicket({
+            type: "kitchen",
+            table: tableName,
+            createdAt: new Date().toISOString(),
+            items: kitchenItems,
+            takeawayNumber,
+            paperWidthMm: 58,
+          });
+        }
+        notify("Rendelés nyomtatva, de internet nélkül került sorba (szinkronra vár).", "info");
+        setPanelTransition("out");
+        await sleep(panelExitDurationMs);
+        setTable(TAKEAWAY_VALUE);
+        setCartItems([]);
+        setOrderStep(1);
+        setActiveSessionId(null);
+        setPanelTransition("in");
+        await sleep(panelEnterDurationMs);
+        setPanelTransition("idle");
+        setIsSubmitting(false);
+        return;
+      }
       notify(result.error ?? "A rendelést most nem lehet elküldeni.", "error");
       setIsSubmitting(false);
       return;
     }
 
-    const kitchenItems = buildKitchenPrintItems(cartItems);
     if (kitchenItems.length > 0) {
       const printResult = printKitchenTicket({
         type: "kitchen",
@@ -660,95 +863,130 @@ const Cashier = () => {
                 </div>
               ) : null}
 
-              <div className="flex flex-wrap gap-3">
-                {categories.length === 0 ? (
-                  <span className="text-sm text-contrast/60">
-                    Még nincs menükategória. Add hozzá az Adminban.
-                  </span>
-                ) : (
-                  categories.map((category) => (
+              <div className="sticky top-2 z-20 rounded-3xl border border-accent-3/60 bg-gradient-to-r from-accent-1/95 via-accent-2/85 to-accent-1/95 p-4 shadow-lg shadow-accent-4/20 backdrop-blur">
+                <div className="flex items-center justify-between gap-3">
+                  <h3 className="text-xs font-semibold uppercase tracking-[0.25em] text-brand/80">
+                    Kategóriák
+                  </h3>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] font-semibold uppercase tracking-wide text-contrast/60">
+                      {categories.length} csoport
+                    </span>
                     <button
-                      key={category.id}
                       type="button"
-                      onClick={() => setActiveCategoryId(category.id)}
-                      className={`rounded-full border px-4 py-2 text-sm font-semibold uppercase tracking-wide transition ${
-                        activeCategoryId === category.id
-                          ? "border-brand/50 bg-brand/15 text-brand"
-                          : "border-accent-3/60 text-contrast/70 hover:border-brand/40 hover:text-brand"
-                      }`}
+                      onClick={scrollPageBottom}
+                      className="inline-flex h-8 w-8 items-center justify-center rounded-full border border-accent-3/60 bg-primary/70 text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                      aria-label="Ugrás az aktuális rendeléshez"
+                      title="Ugrás az aktuális rendeléshez"
                     >
-                      {formatCategoryName(category.name)}
+                      <Icon icon="ph:arrow-down-bold" className="h-4 w-4" />
                     </button>
-                  ))
-                )}
+                  </div>
+                </div>
+                <div className="mt-3 flex flex-wrap gap-3">
+                  {categories.length === 0 ? (
+                    <span className="text-sm text-contrast/60">
+                      Még nincs menükategória. Add hozzá az Adminban.
+                    </span>
+                  ) : (
+                    categories.map((category) => (
+                      <button
+                        key={category.id}
+                        type="button"
+                        onClick={() => setActiveCategoryId(category.id)}
+                        className={`rounded-full border px-4 py-2 text-sm font-semibold uppercase tracking-wide transition ${
+                          activeCategoryId === category.id
+                            ? "border-brand bg-brand text-white shadow-md shadow-brand/30"
+                            : "border-accent-3/60 bg-primary/60 text-contrast/70 hover:border-brand/40 hover:text-brand"
+                        }`}
+                      >
+                        {formatCategoryName(category.name)}
+                      </button>
+                    ))
+                  )}
+                </div>
               </div>
 
-              <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-                {itemsForCategory.length === 0 ? (
-                  <div className="rounded-3xl border border-dashed border-accent-3/60 bg-accent-1/80 p-6 text-sm text-contrast/60">
-                    Még nincs tétel ebben a kategóriában.
+              <div className="rounded-3xl border border-accent-3/60 bg-accent-1/70 p-5 shadow-lg shadow-accent-4/15">
+                <div className="flex items-center justify-between gap-4 border-b border-accent-3/50 pb-3">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.22em] text-brand/80">Tételek</p>
+                    <h3 className="text-base font-semibold text-contrast">
+                      {activeCategoryName ? formatCategoryName(activeCategoryName) : "Válassz kategóriát"}
+                    </h3>
                   </div>
-                ) : (
-                  itemsForCategory.map((item) => {
-                    const isActive = item.is_active !== false;
-                    return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      disabled={!isActive}
-                      onClick={() => {
-                        if (isActive) {
-                          openDetailPanel(item);
-                        }
-                      }}
-                      className={`group relative overflow-hidden rounded-3xl border border-accent-3/60 bg-accent-1/80 p-5 text-left shadow-lg shadow-accent-4/20 transition ${
-                        isActive
-                          ? "hover:-translate-y-1 hover:border-brand/50"
-                          : "cursor-not-allowed"
-                      }`}
-                    >
-                      {!isActive ? (
-                        <span className="pointer-events-none absolute inset-0">
-                          <span className="absolute left-1/2 top-1/2 w-[200%] -translate-x-1/2 -translate-y-1/2 -rotate-[18deg] text-center text-3xl font-extrabold uppercase tracking-[0.35em] text-rose-500">
-                            Elfogyott
+                  <span className="rounded-full border border-accent-3/60 bg-primary/70 px-3 py-1 text-xs font-semibold text-contrast/70">
+                    {itemsForCategory.length} tétel
+                  </span>
+                </div>
+
+                <div className="mt-4 grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
+                  {itemsForCategory.length === 0 ? (
+                    <div className="rounded-3xl border border-dashed border-accent-3/60 bg-primary/70 p-6 text-sm text-contrast/60">
+                      Még nincs tétel ebben a kategóriában.
+                    </div>
+                  ) : (
+                    itemsForCategory.map((item) => {
+                      const isActive = item.is_active !== false;
+                      return (
+                      <button
+                        key={item.id}
+                        type="button"
+                        disabled={!isActive}
+                        onClick={() => {
+                          if (isActive) {
+                            openDetailPanel(item);
+                          }
+                        }}
+                        className={`group relative overflow-hidden rounded-3xl border border-accent-3/60 bg-accent-1/80 p-5 text-left shadow-lg shadow-accent-4/20 transition ${
+                          isActive
+                            ? "hover:-translate-y-1 hover:border-brand/50"
+                            : "cursor-not-allowed"
+                        }`}
+                      >
+                        {!isActive ? (
+                          <span className="pointer-events-none absolute inset-0">
+                            <span className="absolute left-1/2 top-1/2 w-[200%] -translate-x-1/2 -translate-y-1/2 -rotate-[18deg] text-center text-3xl font-extrabold uppercase tracking-[0.35em] text-rose-500">
+                              Elfogyott
+                            </span>
                           </span>
-                        </span>
-                      ) : null}
-                      <div className={isActive ? "" : "opacity-35"}>
-                        <div className="flex items-start justify-between gap-3">
-                          <div className="flex min-w-0 flex-1 flex-col gap-2">
-                            <h3 className="line-clamp-2 text-lg font-semibold leading-tight text-contrast">
-                              {item.name}
-                            </h3>
-                            <div className="flex min-w-0 items-start gap-3">
-                              <span className="min-w-[88px] flex-shrink-0 rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-center text-xs font-semibold tabular-nums text-brand">
-                                {formatCurrency(item.price)}
-                              </span>
-                              {item.description ? (
-                                <p className="text-xs text-contrast/70">{item.description}</p>
-                              ) : null}
+                        ) : null}
+                        <div className={isActive ? "" : "opacity-35"}>
+                          <div className="flex items-start justify-between gap-3">
+                            <div className="flex min-w-0 flex-1 flex-col gap-2">
+                              <h3 className="line-clamp-2 text-lg font-semibold leading-tight text-contrast">
+                                {item.name}
+                              </h3>
+                              <div className="flex min-w-0 items-start gap-3">
+                                <span className="min-w-[88px] flex-shrink-0 rounded-full border border-brand/40 bg-brand/10 px-3 py-1 text-center text-xs font-semibold tabular-nums text-brand">
+                                  {formatCurrency(item.price)}
+                                </span>
+                                {item.description ? (
+                                  <p className="text-xs text-contrast/70">{item.description}</p>
+                                ) : null}
+                              </div>
+                            </div>
+                            <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl border border-accent-3/60 bg-primary/60">
+                              <Icon
+                                icon={item.icon_name || fallbackIconName}
+                                className="h-6 w-6 text-brand"
+                              />
                             </div>
                           </div>
-                          <div className="flex h-12 w-12 flex-shrink-0 items-center justify-center rounded-2xl border border-accent-3/60 bg-primary/60">
-                            <Icon
-                              icon={item.icon_name || fallbackIconName}
-                              className="h-6 w-6 text-brand"
-                            />
+                          <div className="mt-4 flex items-center justify-between text-xs text-contrast/60">
+                            <span>
+                              {item.allow_sauces || item.allow_sides ? "Testreszabás" : "Gyors hozzáadás"}
+                            </span>
+                            <span className={isActive ? "text-brand/70 transition group-hover:text-brand" : "text-contrast/50"}>
+                              {isActive ? "Érintsd meg a hozzáadáshoz" : "Inaktív"}
+                            </span>
                           </div>
                         </div>
-                        <div className="mt-4 flex items-center justify-between text-xs text-contrast/60">
-                          <span>
-                            {item.allow_sauces || item.allow_sides ? "Testreszabás" : "Gyors hozzáadás"}
-                          </span>
-                          <span className={isActive ? "text-brand/70 transition group-hover:text-brand" : "text-contrast/50"}>
-                            {isActive ? "Érintsd meg a hozzáadáshoz" : "Inaktív"}
-                          </span>
-                        </div>
-                      </div>
-                    </button>
-                  );
-                })
-                )}
+                      </button>
+                    );
+                  })
+                  )}
+                </div>
               </div>
             </>
           ) : (
@@ -764,11 +1002,11 @@ const Cashier = () => {
                   reviewLines.map((line) => (
                     <div
                       key={`${line.name}-${line.registerCode ?? "none"}`}
-                      className="flex items-center justify-between rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast"
+                      className="flex items-center justify-between rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-4 text-2xl text-contrast"
                     >
-                      <div>
+                      <div className="flex w-full items-center justify-between gap-3">
                         <p className="font-semibold">{line.quantity}x {line.name}</p>
-                        <p className="text-xs text-contrast/60">
+                        <p className="text-xl text-contrast/80">
                           Kód {line.registerCode ?? "—"}
                         </p>
                       </div>
@@ -787,27 +1025,40 @@ const Cashier = () => {
                 <label className="text-sm font-semibold text-contrast/80" htmlFor="table">
                   Számla neve (opcionális)
                 </label>
-                <input
-                  id="table"
-                  value={billInputValue}
-                  onChange={(event) => {
-                    const nextValue = event.target.value;
-                    if (nextValue.trim()) {
-                      setTable(nextValue);
-                    } else {
-                      setTable(TAKEAWAY_VALUE);
-                    }
-                  }}
-                  className="mt-3 w-full rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast outline-none transition focus:border-brand/60"
-                  placeholder="pl. Ablak 1, Marek"
-                  autoComplete="off"
-                />
+                <div className="mt-3 flex items-stretch gap-2">
+                  <input
+                    id="table"
+                    value={billInputValue}
+                    onChange={(event) => {
+                      const nextValue = event.target.value;
+                      if (nextValue.trim()) {
+                        setTable(nextValue);
+                      } else {
+                        setTable(TAKEAWAY_VALUE);
+                      }
+                    }}
+                    className="w-full rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast outline-none transition focus:border-brand/60"
+                    placeholder="pl. Ablak 1, Marek"
+                    autoComplete="off"
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setIsAddToBillModalOpen(true)}
+                    disabled={panelIsLocked || openBillOptions.length === 0}
+                    className="shrink-0 rounded-full border border-accent-3/60 px-3 py-3 text-[11px] font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    Hozzadas szamlahoz
+                  </button>
+                </div>
                 <p className="mt-2 text-xs text-contrast/60">
                   Hagyd üresen elvitelhez. Adj nevet a számla megnyitásához.
                 </p>
+                {openBillOptions.length === 0 ? (
+                  <p className="mt-1 text-[11px] text-contrast/50">Jelenleg nincs nyitott számla.</p>
+                ) : null}
               </div>
               {activeSessionId && billInputValue.trim() ? (
-                <div className="rounded-2xl border border-amber-400/30 bg-amber-500/10 px-4 py-3 text-xs text-amber-100">
+                <div className="rounded-2xl border border-amber-400/30 bg-amber-200/60 px-4 py-3 text-xs text-amber-900 dark:bg-amber-500/10 dark:text-amber-100">
                   Nyitott számla aktív
                 </div>
               ) : null}
@@ -816,12 +1067,43 @@ const Cashier = () => {
                   Elviteles sorszám: <span className="font-semibold">{formatTakeawayNumber(nextTakeawayNumber)}</span>
                 </div>
               ) : null}
-
-              
+              <div className="grid gap-2 sm:grid-cols-3">
+                <button
+                  type="button"
+                  onClick={handleSubmit}
+                  disabled={panelIsLocked}
+                  className="inline-flex items-center justify-center rounded-full bg-brand px-4 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Küldés a konyhára
+                </button>
+                <button
+                  type="button"
+                  onClick={handleBackToItems}
+                  disabled={panelIsLocked}
+                  className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Vissza
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setTable(TAKEAWAY_VALUE);
+                    setCartItems([]);
+                    setFeedback(null);
+                    setOrderStep(1);
+                    setActiveSessionId(null);
+                  }}
+                  disabled={panelIsLocked}
+                  className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-4 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand disabled:cursor-not-allowed disabled:opacity-70"
+                >
+                  Rendelés törlése
+                </button>
+              </div>
             </div>
           ) : null}
 
-          <div className="space-y-3">
+          {orderStep === 1 ? (
+          <div ref={cartSectionRef} className="space-y-3">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold uppercase tracking-wide text-contrast/80">
                 Aktuális rendelés
@@ -879,6 +1161,7 @@ const Cashier = () => {
                   </p>
                 ) : null}
                 {cartItems.map((item) => {
+                  const swipeOffset = swipeOffsets[item.id] ?? 0;
                   const modifierLines = Object.entries(item.modifiers)
                     .filter(([, values]) => values.length > 0)
                     .map(([group, values]) => {
@@ -893,48 +1176,62 @@ const Cashier = () => {
                       : 0;
                   const unitPrice = item.menuItem.price + sidePrice;
                   return (
-                    <div
-                      key={item.id}
-                      className="rounded-2xl border border-accent-3/60 bg-primary/70 p-4 text-sm text-contrast"
-                    >
-                      <div className="flex items-start justify-between gap-3">
-                        <div>
-                          <p className="font-semibold">{item.menuItem.name}</p>
-                          {modifierLines.length ? (
-                            <div className="mt-1 text-[11px] text-contrast/60">
-                              {modifierLines.join(" | ")}
-                            </div>
-                          ) : null}
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => removeCartItem(item.id)}
-                          className="text-[11px] font-semibold uppercase tracking-wide text-rose-300 transition hover:text-rose-200"
-                        >
-                          Eltávolítás
-                        </button>
-                      </div>
-                      <div className="mt-3 flex items-center justify-between text-xs text-contrast/70">
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => updateCartQuantity(item.id, -1)}
-                            className="h-7 w-7 rounded-full border border-accent-3/60 text-base text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                    <div key={item.id} className="relative overflow-hidden rounded-2xl">
+                      <div
+                        className={`absolute inset-0 flex items-center justify-end px-4 transition-colors ${
+                          swipeOffset < -8 ? "bg-rose-500/15" : "bg-transparent"
+                        }`}
+                      />
+                      <div
+                        className="rounded-2xl border border-accent-3/60 bg-primary/70 p-4 text-sm text-contrast transition-transform"
+                        style={{
+                          transform: `translateX(${swipeOffset}px)`,
+                          touchAction: "pan-y",
+                        }}
+                        onPointerDown={(event) => handleCartSwipeStart(item.id, event)}
+                        onPointerMove={handleCartSwipeMove}
+                        onPointerUp={handleCartSwipeEnd}
+                        onPointerCancel={handleCartSwipeEnd}
+                      >
+                        <div className="flex items-start justify-between gap-3">
+                          <div>
+                            <p className="font-semibold">{item.menuItem.name}</p>
+                            {modifierLines.length ? (
+                              <div className="mt-1 text-[11px] text-contrast/60">
+                                {modifierLines.join(" | ")}
+                              </div>
+                            ) : null}
+                          </div>
+                          <span
+                            className={`text-[11px] font-semibold uppercase tracking-wide transition ${
+                              swipeOffset < -8 ? "text-rose-400" : "text-contrast/45"
+                            }`}
                           >
-                            -
-                          </button>
-                          <span className="min-w-[24px] text-center text-sm font-semibold">
-                            {item.quantity}
+                            Eltávolítás
                           </span>
-                          <button
-                            type="button"
-                            onClick={() => updateCartQuantity(item.id, 1)}
-                            className="h-7 w-7 rounded-full border border-accent-3/60 text-base text-contrast/70 transition hover:border-brand/50 hover:text-brand"
-                          >
-                            +
-                          </button>
                         </div>
-                        <span>{formatCurrency(unitPrice * item.quantity)}</span>
+                        <div className="mt-3 flex items-center justify-between text-xs text-contrast/70">
+                          <div className="flex items-center gap-2">
+                            <button
+                              type="button"
+                              onClick={() => updateCartQuantity(item.id, -1)}
+                              className="h-7 w-7 rounded-full border border-accent-3/60 text-base text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                            >
+                              -
+                            </button>
+                            <span className="min-w-[24px] text-center text-sm font-semibold">
+                              {item.quantity}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => updateCartQuantity(item.id, 1)}
+                              className="h-7 w-7 rounded-full border border-accent-3/60 text-base text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                            >
+                              +
+                            </button>
+                          </div>
+                          <span>{formatCurrency(unitPrice * item.quantity)}</span>
+                        </div>
                       </div>
                     </div>
                   );
@@ -942,6 +1239,7 @@ const Cashier = () => {
               </div>
             )}
           </div>
+          ) : null}
 
           <div className="rounded-2xl border border-accent-3/60 bg-primary/70 px-4 py-3 text-sm text-contrast/70">
             <div className="flex items-center justify-between">
@@ -960,60 +1258,32 @@ const Cashier = () => {
           {feedback ? <p className="text-sm text-contrast/70">{feedback}</p> : null}
           {ordersError ? <p className="text-sm text-rose-300">{ordersError}</p> : null}
 
-          <div className="flex flex-col gap-3">
-            {orderStep === 1 ? (
-              <>
-                <button
-                  type="button"
-                  onClick={() => {
-                    if (cartItems.length === 0 && existingItems.length === 0) {
-                      notify("Adj hozzá legalább egy tételt a folytatáshoz.", "error");
-                      return;
-                    }
-                    setFeedback(null);
-                    setOrderStep(2);
-                  }}
-                  disabled={panelIsLocked}
-                  className="inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  Számla és küldés
-                </button>
-              </>
-            ) : (
-              <>
-                <button
-                  type="button"
-                  onClick={handleSubmit}
-                  disabled={panelIsLocked}
-                  className="inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  Küldés a konyhára
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setOrderStep(1)}
-                  disabled={panelIsLocked}
-                  className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand disabled:cursor-not-allowed disabled:opacity-70"
-                >
-                  Vissza a tételekhez
-                </button>
-              </>
-            )}
-            <button
-              type="button"
-              onClick={() => {
-                setTable(TAKEAWAY_VALUE);
-                setCartItems([]);
-                setFeedback(null);
-                setOrderStep(1);
-                setActiveSessionId(null);
-              }}
-              disabled={panelIsLocked}
-              className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand disabled:cursor-not-allowed disabled:opacity-70"
-            >
-              Rendelés törlése
-            </button>
-          </div>
+          {orderStep === 1 ? (
+            <div className="flex flex-col gap-3">
+              <button
+                type="button"
+                onClick={handleGoToBillAndSend}
+                disabled={panelIsLocked}
+                className="inline-flex items-center justify-center rounded-full bg-brand px-6 py-3 text-sm font-semibold uppercase tracking-wide text-white shadow-md shadow-brand/40 transition hover:-translate-y-0.5 hover:shadow-lg disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Számla és küldés
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setTable(TAKEAWAY_VALUE);
+                  setCartItems([]);
+                  setFeedback(null);
+                  setOrderStep(1);
+                  setActiveSessionId(null);
+                }}
+                disabled={panelIsLocked}
+                className="inline-flex items-center justify-center rounded-full border border-accent-3/60 px-6 py-3 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand disabled:cursor-not-allowed disabled:opacity-70"
+              >
+                Rendelés törlése
+              </button>
+            </div>
+          ) : null}
         </aside>
       </div>
 
@@ -1088,6 +1358,52 @@ const Cashier = () => {
                         );
                       })}
                     </div>
+                    {group.id === "Extras" ? (
+                      <div className="space-y-2">
+                        <div className="flex flex-col gap-2 sm:flex-row">
+                          <input
+                            value={customExtraInput}
+                            onChange={(event) => setCustomExtraInput(event.target.value)}
+                            onKeyDown={(event) => {
+                              if (event.key === "Enter") {
+                                event.preventDefault();
+                                addCustomExtra();
+                              }
+                            }}
+                            className="flex-1 rounded-2xl border border-accent-3/60 bg-primary/70 px-3 py-2 text-sm text-contrast outline-none transition focus:border-brand/60"
+                            placeholder="Egyedi extra (egyszeri)"
+                          />
+                          <button
+                            type="button"
+                            onClick={addCustomExtra}
+                            className="rounded-full border border-brand/40 px-4 py-2 text-xs font-semibold uppercase tracking-wide text-brand transition hover:bg-brand/10"
+                          >
+                            Egyedi extra hozzáadása
+                          </button>
+                        </div>
+                        {(() => {
+                          const predefined = new Set(group.options);
+                          const customSelected = (selectedModifiers[group.id] ?? []).filter(
+                            (value) => !predefined.has(value)
+                          );
+                          if (customSelected.length === 0) return null;
+                          return (
+                            <div className="flex flex-wrap gap-2">
+                              {customSelected.map((value) => (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  onClick={() => removeCustomExtra(value)}
+                                  className="rounded-full border border-brand/50 bg-brand/15 px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-brand transition hover:border-rose-400/70 hover:text-rose-300"
+                                >
+                                  {value} ×
+                                </button>
+                              ))}
+                            </div>
+                          );
+                        })()}
+                      </div>
+                    ) : null}
                   </div>
                 ))}
               </div>
@@ -1140,6 +1456,76 @@ const Cashier = () => {
           )
         : null}
 
+      {isAddToBillModalOpen && portalTarget
+        ? createPortal(
+            <div className="fixed inset-0 z-[85] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4">
+              <button
+                type="button"
+                aria-label="Bezárás"
+                className="absolute inset-0"
+                onClick={() => setIsAddToBillModalOpen(false)}
+              />
+              <div className="relative z-10 flex w-full max-w-2xl max-h-[85vh] flex-col overflow-hidden rounded-3xl border border-accent-3/60 bg-primary p-6 shadow-2xl">
+                <div className="flex items-start justify-between gap-4">
+                  <div>
+                    <p className="text-xs font-semibold uppercase tracking-[0.3em] text-brand/70">
+                      Nyitott számlák
+                    </p>
+                    <h2 className="text-2xl font-semibold text-contrast">Hozzadas szamlahoz</h2>
+                    <p className="mt-1 text-xs text-contrast/60">
+                      Válaszd ki, melyik nyitott számlához menjen ez a rendelés.
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setIsAddToBillModalOpen(false)}
+                    className="rounded-full border border-accent-3/60 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+                  >
+                    Bezárás
+                  </button>
+                </div>
+
+                <div className="mt-6 no-scrollbar min-h-0 flex-1 space-y-3 overflow-y-auto pr-2">
+                  {openBillOptions.length === 0 ? (
+                    <p className="rounded-2xl border border-dashed border-accent-3/60 bg-primary/70 p-4 text-sm text-contrast/60">
+                      Jelenleg nincs nyitott számla.
+                    </p>
+                  ) : (
+                    openBillOptions.map((option) => (
+                      <button
+                        key={option.sessionId}
+                        type="button"
+                        onClick={() => {
+                          setTable(option.table);
+                          setActiveSessionId(option.sessionId);
+                          setIsAddToBillModalOpen(false);
+                          notify("A rendelés a kiválasztott nyitott számlához lesz hozzáadva.", "success");
+                        }}
+                        className="w-full rounded-2xl border border-accent-3/60 bg-accent-1/80 px-4 py-3 text-left text-sm text-contrast transition hover:border-brand/50"
+                      >
+                        <div className="flex items-center justify-between gap-3">
+                          <div>
+                            <p className="font-semibold">
+                              {isTakeaway(option.table) ? takeawayLabel : `Számla ${option.table}`}
+                            </p>
+                            <p className="text-xs text-contrast/60">
+                              {option.ordersCount} rendelés • {option.itemCount} tétel
+                            </p>
+                          </div>
+                          <span className="rounded-full bg-brand px-3 py-1 text-[11px] font-semibold uppercase tracking-wide text-white">
+                            Kiválasztás
+                          </span>
+                        </div>
+                      </button>
+                    ))
+                  )}
+                </div>
+              </div>
+            </div>,
+            portalTarget
+          )
+        : null}
+
       {billGroup && portalTarget
         ? createPortal(
             <div className="fixed inset-0 z-[80] flex items-center justify-center bg-primary/60 backdrop-blur-lg p-4">
@@ -1176,7 +1562,7 @@ const Cashier = () => {
                     notify("Számla lezárva.", "success");
                     setBillTable(null);
                   }}
-                  className="rounded-full border border-amber-400/40 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-100 transition hover:border-amber-300 hover:text-amber-50"
+                  className="rounded-full border border-amber-400/40 px-3 py-1 text-xs font-semibold uppercase tracking-wide text-amber-900 transition hover:border-amber-500 hover:text-amber-950 dark:text-amber-100 dark:hover:border-amber-300 dark:hover:text-amber-50"
                 >
                   Számla lezárása
                 </button>
@@ -1293,3 +1679,6 @@ const Cashier = () => {
 };
 
 export default Cashier;
+
+
+

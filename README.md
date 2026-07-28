@@ -69,4 +69,16 @@ Feel free to reorganise as your project grows (for example, splitting layout, fe
 3. Introduce state management, API clients, or testing frameworks as required.
 4. Consider hooking the project into your CI/CD pipeline to automate builds and linting.
 
-Happy hacking! This kit exists so you can skip the boilerplate and focus on shipping features.*** End Patch
+## Database environments (dev vs prod)
+
+Keep production Supabase keys in `.env` (your current setup), and put development Supabase keys in `.env.development`.
+
+- `npm run dev` -> uses `.env.development` (dev database)
+- `npm run start` -> uses production mode with `.env` (real database)
+
+Setup:
+1. Create a second Supabase project for development.
+2. Copy the same schema/policies from prod to dev.
+3. Fill `.env.development` with the dev project keys.
+
+Happy hacking! This kit exists so you can skip the boilerplate and focus on shipping features.

@@ -42,6 +42,7 @@ const isTakeaway = (value: string) => {
 
 const formatBillLabel = (value: string) =>
   isTakeaway(value) ? TAKEAWAY_LABEL : `Számla ${value}`;
+const formatTakeawayNumber = (value: number) => `#${String(value).padStart(3, "0")}`;
 
 type ModifierLine = {
   text: string;
@@ -93,6 +94,25 @@ const Kitchen = () => {
     }),
     [orders]
   );
+
+  const takeawayNumberByOrderId = useMemo(() => {
+    const countersByDay = new Map<string, number>();
+    const map = new Map<string, number>();
+
+    orders
+      .filter((order) => isTakeaway(order.table))
+      .slice()
+      .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
+      .forEach((order) => {
+        const created = new Date(order.createdAt);
+        const dayKey = `${created.getFullYear()}-${created.getMonth()}-${created.getDate()}`;
+        const next = (countersByDay.get(dayKey) ?? 0) + 1;
+        countersByDay.set(dayKey, next);
+        map.set(order.id, next);
+      });
+
+    return map;
+  }, [orders]);
 
   const markOrderExiting = (orderId: string) => {
     setExitingOrders((prev) => ({ ...prev, [orderId]: true }));
@@ -208,7 +228,11 @@ const Kitchen = () => {
                       </button>
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <p className="text-lg font-semibold">{formatBillLabel(order.table)}</p>
+                          <p className="text-lg font-semibold">
+                            {isTakeaway(order.table)
+                              ? `Elvitel ${formatTakeawayNumber(takeawayNumberByOrderId.get(order.id) ?? 1)}`
+                              : formatBillLabel(order.table)}
+                          </p>
                           <p className="text-xs text-contrast/60">
                             Feladva {formatTime(order.createdAt)} • {doneCount}/{itemCount} kész
                           </p>
@@ -359,7 +383,9 @@ const Kitchen = () => {
                             <div className="flex items-start justify-between gap-3">
                               <div>
                                 <p className="text-lg font-semibold">
-                                  {formatBillLabel(order.table)}
+                                  {isTakeaway(order.table)
+                                    ? `Elvitel ${formatTakeawayNumber(takeawayNumberByOrderId.get(order.id) ?? 1)}`
+                                    : formatBillLabel(order.table)}
                                 </p>
                                 <p className="text-xs text-contrast/60">
                                   Kiszolgálva {formatTime(order.createdAt)} • {doneCount}/{itemCount} kész

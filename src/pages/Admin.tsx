@@ -6,7 +6,7 @@ import type { MenuItem } from "../features/menu/MenuContext";
 import useLockBodyScroll from "../hooks/useLockBodyScroll";
 type ModalState =
   | { mode: "add"; type: "category" | "sauce" | "side" | "item" }
-  | { mode: "edit-list"; type: "category" | "sauce" | "side" }
+  | { mode: "edit-list"; type: "category" | "sauce" | "side" | "extra" }
   | { mode: "edit-item"; id: string }
   | null;
 const ICON_CHOICES = [
@@ -44,6 +44,7 @@ const TYPE_LABELS = {
   category: "kategória",
   sauce: "szósz",
   side: "köret",
+  extra: "extra",
   item: "menütétel",
 } as const;
 const formatCategoryName = (name: string) => {
@@ -61,6 +62,7 @@ const Admin = () => {
     categories,
     sauces,
     sides,
+    extras,
     items,
     isLoading,
     error,
@@ -68,13 +70,16 @@ const Admin = () => {
     deleteCategory,
     addSauce,
     addSide,
+    addExtra,
     addItem,
     updateCategory,
     updateSauce,
     updateSide,
+    updateExtra,
     updateItem,
     deleteItem,
     deleteSauce,
+    deleteExtra,
   } = useMenu();
   const [modal, setModal] = useState<ModalState>(null);
   const [modalFeedback, setModalFeedback] = useState<string | null>(null);
@@ -97,8 +102,9 @@ const Admin = () => {
   const [categoryEdits, setCategoryEdits] = useState<Record<string, string>>({});
   const [sauceEdits, setSauceEdits] = useState<Record<string, string>>({});
   const [sideEdits, setSideEdits] = useState<Record<string, string>>({});
+  const [extraEdits, setExtraEdits] = useState<Record<string, string>>({});
   const [rowFeedback, setRowFeedback] = useState<Record<string, string | null>>({});
-  const [newEntry, setNewEntry] = useState({ category: "", sauce: "", side: "" });
+  const [newEntry, setNewEntry] = useState({ category: "", sauce: "", side: "", extra: "" });
   const modalType = modal?.mode === "add" || modal?.mode === "edit-list" ? modal.type : null;
   const categoryMap = useMemo(
     () => new Map(categories.map((category) => [category.id, category.name])),
@@ -158,6 +164,14 @@ const Admin = () => {
       }, {})
     );
   }, [sides]);
+  useEffect(() => {
+    setExtraEdits(
+      extras.reduce<Record<string, string>>((acc, extra) => {
+        acc[extra.id] = extra.name;
+        return acc;
+      }, {})
+    );
+  }, [extras]);
   const closeModal = () => {
     setModal(null);
     setModalFeedback(null);
@@ -180,7 +194,7 @@ const Admin = () => {
     setItemIsActive(true);
     setConfirmDeleteItem(false);
   };
-  const openEditListModal = (type: "category" | "sauce" | "side") => {
+  const openEditListModal = (type: "category" | "sauce" | "side" | "extra") => {
     setModal({ mode: "edit-list", type });
     setModalFeedback(null);
   };
@@ -283,13 +297,27 @@ const Admin = () => {
       [id]: result.ok ? "Mentve." : result.error ?? "Nem sikerült menteni.",
     }));
   };
-  const handleAddInline = async (type: "category" | "sauce" | "side") => {
+  const handleUpdateExtra = async (id: string) => {
+    const result = await updateExtra(id, extraEdits[id] ?? "");
+    setRowFeedback((prev) => ({
+      ...prev,
+      [id]: result.ok ? "Mentve." : result.error ?? "Nem sikerült menteni.",
+    }));
+  };
+  const handleAddInline = async (type: "category" | "sauce" | "side" | "extra") => {
     const value = newEntry[type].trim();
     if (!value) {
       setModalFeedback("A név megadása kötelező.");
       return;
     }
-    const addFn = type === "category" ? addCategory : type === "sauce" ? addSauce : addSide;
+    const addFn =
+      type === "category"
+        ? addCategory
+        : type === "sauce"
+          ? addSauce
+          : type === "side"
+            ? addSide
+            : addExtra;
     const result = await addFn(value);
     setModalFeedback(result.ok ? "Hozzáadva." : result.error ?? "Nem sikerült hozzáadni.");
     if (result.ok) {
@@ -297,15 +325,34 @@ const Admin = () => {
     }
   };
   const renderEditList = (
-    type: "category" | "sauce" | "side",
+    type: "category" | "sauce" | "side" | "extra",
     data: { id: string; name: string }[]
   ) => {
-    const edits = type === "category" ? categoryEdits : type === "sauce" ? sauceEdits : sideEdits;
+    const edits =
+      type === "category"
+        ? categoryEdits
+        : type === "sauce"
+          ? sauceEdits
+          : type === "side"
+            ? sideEdits
+            : extraEdits;
     const setEdits =
-      type === "category" ? setCategoryEdits : type === "sauce" ? setSauceEdits : setSideEdits;
+      type === "category"
+        ? setCategoryEdits
+        : type === "sauce"
+          ? setSauceEdits
+          : type === "side"
+            ? setSideEdits
+            : setExtraEdits;
     const saveHandler =
-      type === "category" ? handleUpdateCategory : type === "sauce" ? handleUpdateSauce : handleUpdateSide;
-    const canDelete = type === "category" || type === "sauce";
+      type === "category"
+        ? handleUpdateCategory
+        : type === "sauce"
+          ? handleUpdateSauce
+          : type === "side"
+            ? handleUpdateSide
+            : handleUpdateExtra;
+    const canDelete = type === "category" || type === "sauce" || type === "extra";
     return (
       <div className="space-y-3">
         <div className="flex flex-col gap-3 rounded-2xl border border-dashed border-accent-3/60 bg-primary/60 p-4 sm:flex-row sm:items-center">
@@ -370,7 +417,8 @@ const Admin = () => {
                     }
 
                     if (confirmDeleteCategoryId === entry.id) {
-                      const label = type === "category" ? "Kategória" : "Szósz";
+                      const label =
+                        type === "category" ? "Kategória" : type === "sauce" ? "Szósz" : "Extra";
                       return (
                         <button
                           type="button"
@@ -378,7 +426,9 @@ const Admin = () => {
                             const result =
                               type === "category"
                                 ? await deleteCategory(entry.id)
-                                : await deleteSauce(entry.id);
+                                : type === "sauce"
+                                  ? await deleteSauce(entry.id)
+                                  : await deleteExtra(entry.id);
                             setConfirmDeleteCategoryId(null);
                             setModalFeedback(
                               result.ok
@@ -444,6 +494,13 @@ const Admin = () => {
           className="rounded-full border border-accent-3/60 px-5 py-2 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
         >
           Szószok szerkesztése
+        </button>
+        <button
+          type="button"
+          onClick={() => openEditListModal("extra")}
+          className="rounded-full border border-accent-3/60 px-5 py-2 text-sm font-semibold uppercase tracking-wide text-contrast/70 transition hover:border-brand/50 hover:text-brand"
+        >
+          Extrák szerkesztése
         </button>
       </div>
       <div className="rounded-3xl border border-accent-3/60 bg-accent-2/70 p-8">
@@ -521,6 +578,7 @@ const Admin = () => {
                   {modal.mode === "edit-list" && modalType === "category" && "Kategóriák"}
                   {modal.mode === "edit-list" && modalType === "sauce" && "Szószok"}
                   {modal.mode === "edit-list" && modalType === "side" && "Köretek"}
+                  {modal.mode === "edit-list" && modalType === "extra" && "Extrák"}
                   {modal.mode === "add" && modalType === "category" && "Kategória"}
                   {modal.mode === "add" && modalType === "sauce" && "Szósz"}
                   {modal.mode === "add" && modalType === "side" && "Köret"}
@@ -541,7 +599,13 @@ const Admin = () => {
               {modal.mode === "edit-list" ? (
                 renderEditList(
                   modal.type,
-                  modal.type === "category" ? categories : modal.type === "sauce" ? sauces : sides
+                  modal.type === "category"
+                    ? categories
+                    : modal.type === "sauce"
+                      ? sauces
+                      : modal.type === "side"
+                        ? sides
+                        : extras
                 )
               ) : modal.mode === "edit-item" || modal.type === "item" ? (
                 <>

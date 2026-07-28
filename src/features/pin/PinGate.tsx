@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useMemo, useState } from "react";
 import { readEnv } from "../../lib/runtimeEnv";
 
 type PinGateProps = {
@@ -6,7 +6,12 @@ type PinGateProps = {
 };
 
 export const PIN_UNLOCK_KEY = "kiosk_pin_unlocked_until";
-const INACTIVITY_TIMEOUT_MS = 15 * 60 * 1000;
+
+const getNextLocalMidnight = () => {
+  const nextMidnight = new Date();
+  nextMidnight.setHours(24, 0, 0, 0);
+  return nextMidnight.getTime();
+};
 
 const getStoredUnlockUntil = () => {
   if (typeof window === "undefined") {
@@ -49,44 +54,6 @@ const PinGate = ({ children }: PinGateProps) => {
   const [pinInput, setPinInput] = useState("");
   const [error, setError] = useState<string | null>(null);
 
-  const lock = (reason?: string) => {
-    localStorage.removeItem(PIN_UNLOCK_KEY);
-    setUnlocked(false);
-    setPinInput("");
-    setError(reason ?? null);
-  };
-
-  useEffect(() => {
-    if (!unlocked) {
-      return;
-    }
-
-    let timeoutId: ReturnType<typeof setTimeout> | undefined;
-
-    const resetTimer = () => {
-      const unlockUntil = Date.now() + INACTIVITY_TIMEOUT_MS;
-      localStorage.setItem(PIN_UNLOCK_KEY, String(unlockUntil));
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-      timeoutId = setTimeout(() => {
-        lock("A munkamenet lejárt. Add meg újra a PIN-t.");
-      }, INACTIVITY_TIMEOUT_MS);
-    };
-
-    resetTimer();
-
-    const events = ["mousemove", "mousedown", "keydown", "touchstart", "scroll"];
-    events.forEach((event) => window.addEventListener(event, resetTimer));
-
-    return () => {
-      events.forEach((event) => window.removeEventListener(event, resetTimer));
-      if (timeoutId) {
-        clearTimeout(timeoutId);
-      }
-    };
-  }, [unlocked]);
-
   const handleDigit = (digit: string) => {
     setError(null);
     setPinInput((current) => normalizePin(current + digit));
@@ -109,8 +76,7 @@ const PinGate = ({ children }: PinGateProps) => {
     }
 
     if (pinInput === configuredPin) {
-      const unlockUntil = Date.now() + INACTIVITY_TIMEOUT_MS;
-      localStorage.setItem(PIN_UNLOCK_KEY, String(unlockUntil));
+      localStorage.setItem(PIN_UNLOCK_KEY, String(getNextLocalMidnight()));
       setUnlocked(true);
       setPinInput("");
       setError(null);
@@ -209,6 +175,3 @@ const PinGate = ({ children }: PinGateProps) => {
 };
 
 export default PinGate;
-
-
-
